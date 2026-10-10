@@ -22,12 +22,7 @@
   </header>
 
   <header>
-    <h1>Pay Off the Car Loan Early, or Keep the Cash in a Money Market?</h1>
-    <p class="sub">
-      Compares paying extra on a car loan now with leaving that cash in a money market fund. Both choices
-      spend the same each month; once the loan is paid off early, its payment goes into the money market.
-      Money market interest is taxed as ordinary income plus NIIT (2026 federal rules).
-    </p>
+    <h1>Pay Extra on Your Car Loan, or Keep the Money in a Money Market?</h1>
     <p class="sub">Not tax or investment advice; accuracy is not guaranteed. See the <a href="../">disclaimer</a>.</p>
   </header>
 
@@ -46,26 +41,20 @@
       <section>
         <h2>Taxes</h2>
         <div id="taxFields"></div>
-        <p id="taxSummary" class="note"></p>
       </section>
       <button id="reset" type="button">Reset to defaults</button>
       <details class="panel notes">
         <summary><h2>Assumptions</h2></summary>
         <ul>
-          <li>Federal tax only, 2026 brackets with the standard deduction. Your tax rate is the bracket for
-            your income; money market interest is taxed at that rate, plus 3.8% NIIT if your income is over
-            $200k (single) or $250k (joint).</li>
-          <li>The APR is used as the loan's interest rate. Extra payments keep the monthly payment the same, so
-            the loan ends sooner. A monthly extra is paid on top of the scheduled payment until the loan is
-            gone; in the other choice the same amount goes into the money market each month. No prepayment
-            penalty.</li>
-          <li>Money market interest compounds monthly and its tax is paid as it is earned. The rate stays the
-            same; real money market yields move with short-term interest rates.</li>
-          <li>Car loan interest deduction (2025–2028 only): up to $10,000 a year for a new, U.S.-assembled,
-            personal-use vehicle bought with a loan taken out after 2024. It shrinks by $200 per $1,000 of
-            income over $100k (single) or $200k (joint). It does not reduce NIIT.</li>
-          <li>The comparison runs to the loan's original end date. State tax is not included (Treasury money
-            market funds are often exempt from state tax, which would favor keeping the cash a little).</li>
+          <li>Fixed-rate loan paid monthly; each month's interest is the balance × APR ÷ 12. Extra money goes
+            straight to principal and the monthly payment stays the same, so the loan ends sooner. No
+            prepayment penalty.</li>
+          <li>Money market interest is taxed at the marginal rate you enter. Your actual after-tax yield
+            depends on federal and state tax, the kind of fund (Treasury funds are often free of state tax),
+            and your situation.</li>
+          <li>The loan's rate is not tax-adjusted, since car loan interest is usually not deductible.</li>
+          <li>All rates are annual rates compounded monthly, so they can be compared directly.</li>
+          <li>Keep an emergency fund: money paid into a loan can't be taken back out.</li>
         </ul>
       </details>
     </aside>
@@ -74,38 +63,43 @@
       <div class="card">
         <h2>1. Should you pay extra?</h2>
         <p id="verdict" class="headline"></p>
+        <div class="tablewrap"><table id="rateTable" class="data rates"></table></div>
         <div id="chartBars" class="chart"></div>
-        <h3>Decision map</h3>
-        <p class="sub small" id="mapNote"></p>
-        <div id="chartMap" class="chart"></div>
       </div>
+
       <div class="card">
-        <h2>2. How much to pay extra?</h2>
-        <p class="sub small" id="amountNote">Extra net worth at the loan's original end date (after tax), for each amount paid
-          extra today. The dot is the amount you entered.</p>
-        <div id="chartAmount" class="chart"></div>
+        <h2>2. Find your break-even payment</h2>
+        <div class="seg" role="radiogroup" aria-label="Extra payment type">
+          <label><input type="radio" name="mode" value="monthly"> Monthly extra payment</label>
+          <label><input type="radio" name="mode" value="lump"> One-time lump sum</label>
+        </div>
+        <div id="amountField"></div>
+        <div id="breakEven" class="be"></div>
+        <details class="explain">
+          <summary>What does break-even mean here?</summary>
+          <ul>
+            <li><b>Car loan APR</b>: the rate in your loan contract. Paying extra does not change it; it
+              changes how much interest you pay and when the loan ends.</li>
+            <li><b>After-tax money market yield</b>: what the same money would earn in the money market,
+              after tax.</li>
+            <li><b>Return on paying extra</b>: the annualized internal rate of return (IRR) of the extra
+              payments compared with the regular schedule. That is the money you pay in early, and the
+              payments you no longer owe once the loan ends sooner.</li>
+            <li><b>Break-even</b> is the extra amount at which that return equals the after-tax money market
+              yield. The calculator checks amounts from $0 up to paying the loan off entirely.</li>
+          </ul>
+        </details>
       </div>
+
       <div class="card">
-        <h2>3. What do you gain?</h2>
-        <p class="sub small">Interest saved is not the same as money gained: cash used to pay the loan stops
-          earning in the money market. The bars break the gain down.</p>
-        <div id="kpis" class="kpis three"></div>
-        <div id="chartWaterfall" class="chart"></div>
-        <h3>Gain over time</h3>
-        <p class="sub small">Net worth with the extra payment minus net worth without it, month by month. The
-          line bends when the loan is paid off: from then on both choices are adding money to the money market.
-          With the car loan deduction, it also bends when the deduction ends after 2028.</p>
-        <div id="chartTime" class="chart"></div>
+        <h2>3. Your results</h2>
+        <div id="kpis" class="kpis four"></div>
+        <p id="compare" class="compare"></p>
+        <div class="tablewrap"><table id="schedTable" class="data"></table></div>
       </div>
     </section>
   </main>
 
-  <div id="tapcard" class="tapcard" hidden>
-    <button id="tapcard-close" type="button" aria-label="Close">×</button>
-    <div class="body"></div>
-  </div>
-
-  <script src="../marriage/tax.js"></script>
   <script src="calc.js"></script>
   <script src="ui.js"></script>
   <script src="app.js"></script>

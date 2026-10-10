@@ -1,132 +1,170 @@
-// Car loan prepayment vs. money market: calculation engine (2026 U.S. federal tax).
-// Sources: IRS Rev. Proc. 2025-32 (brackets, standard deduction, via ../marriage/tax.js);
-// IRC 1411 (NIIT); OBBBA sec. 70203 and T.D. 10054 (car loan interest deduction, 2025-2028).
+// Car loan payoff calculator: amortization, extra-payment returns (IRR), and break-even solver.
+//
+// Rate conventions: the loan APR is a nominal annual rate compounded monthly (APR / 12 per month).
+// Returns from extra payments are reported the same way (monthly IRR × 12), and the money market
+// yield is treated the same way, so all three rates are comparable.
 (function (root) {
   "use strict";
-  const { TAX_2026 } = root.TaxCalc;
 
-  const CAR = { max: 10000, phaseStart: { single: 100000, mfj: 200000 }, lastYear: 2028 };
+  const EPS = 1e-9;
+  const MAX_MONTHS = 1200;
 
-  // Ordinary bracket on the next dollar of income (standard deduction assumed).
-  function bracketRate(magi, status) {
-    const taxable = magi - TAX_2026.standardDeduction[status];
-    if (taxable < 0) return 0;
-    return TAX_2026.brackets[status].find(([upper]) => taxable < upper)[1];
-  }
-
-  // Tax rates on the next dollar of income.
-  // ord: federal income tax bracket; niit: 3.8% if MAGI is over the threshold.
-  function taxRates(status, magi) {
-    const ord = bracketRate(magi, status);
-    const niit = magi > TAX_2026.niitThreshold[status] ? TAX_2026.niitRate : 0;
-    return { ord, niit, mm: ord + niit };
-  }
-
-  // The car loan deduction shrinks by $200 per $1,000 (or part) of MAGI over the threshold.
-  function carPhaseReduction(status, magi) {
-    return 200 * Math.ceil(Math.max(0, magi - CAR.phaseStart[status]) / 1000);
-  }
-
-  function amortPayment(balance, rate, n) {
+  function amortPayment(balance, apr, n) {
     if (balance <= 0) return 0;
-    const r = rate / 12;
+    if (n <= 0) return balance;
+    const r = apr / 12;
     return r === 0 ? balance / n : (balance * r) / (1 - Math.pow(1 + r, -n));
   }
 
-  // p = { balance, apr, months, mmRate, status, magi, carDeduction, startYear, startMonth (0-11) }
-  // prepay: extra principal paid now, taken out of the money market.
-  // monthlyExtra: extra principal paid every month on top of the scheduled payment.
-  //
-  // Both strategies spend the same each month: the scheduled payment plus the monthly extra. The
-  // Pay strategy puts the extra toward the loan; the Keep strategy puts it in the money market.
-  // Once a loan is gone, whatever it no longer needs goes into the money market. Money market
-  // interest is taxed as it is earned (ordinary income + NIIT). The car loan deduction, if it
-  // applies, is credited at each year end through 2028. The comparison runs to the loan's
-  // original end date, when both strategies have no loan left, so the difference is all in the
-  // money market balance.
-  function simulate(p, prepay, monthlyExtra = 0) {
-    const t = taxRates(p.status, p.magi);
-    const mmAfter = (p.mmRate * (1 - t.mm)) / 12;
-    const mmGross = p.mmRate / 12;
-    const r = p.apr / 12;
-    const payment = amortPayment(p.balance, p.apr, p.months);
-    const reduction = carPhaseReduction(p.status, p.magi);
-    prepay = Math.max(0, Math.min(prepay, p.balance));
-    monthlyExtra = Math.max(0, monthlyExtra);
-    const budget = payment + monthlyExtra;
-
-    const mk = (bal, mm) => ({ bal, mm, interest: 0, earned: 0, deduction: 0, yrInterest: 0, payoff: bal > 0 ? null : 0 });
-    const pay = mk(p.balance - prepay, 0);
-    const keep = mk(p.balance, prepay);
-    const gain = [0]; // net worth of Pay minus Keep, by month
-    const N = p.months;
-
-    for (let m = 0; m < N; m++) {
-      const month = (p.startMonth + m) % 12;
-      const year = p.startYear + Math.floor((p.startMonth + m) / 12);
-      for (const s of [pay, keep]) {
-        // Money market interest on the balance at the start of the month, after tax.
-        const earned = s.mm * mmAfter;
-        s.mm += earned;
-        s.earned += earned;
-        // Loan payment; whatever the loan no longer needs goes to the money market.
-        if (s.bal > 0) {
-          const interest = s.bal * r;
-          const target = s === pay ? budget : payment;
-          const due = m === N - 1 ? s.bal + interest : Math.min(target, s.bal + interest);
-          s.bal -= due - interest;
-          if (s.bal < 1e-9) { s.bal = 0; s.payoff = m + 1; }
-          s.interest += interest;
-          s.yrInterest += interest;
-          s.mm += budget - due;
-        } else {
-          s.mm += budget;
-        }
-        // Car loan deduction for the year, credited at year end (or at the end of the comparison).
-        if (month === 11 || m === N - 1) {
-          if (p.carDeduction && year <= CAR.lastYear) {
-            const ded = Math.max(0, Math.min(s.yrInterest, CAR.max) - reduction);
-            s.mm += t.ord * ded;
-            s.deduction += t.ord * ded;
-          }
-          s.yrInterest = 0;
-        }
-      }
-      // Net worth counts the deduction earned so far this year, so the line has no year-end jumps.
-      const deductible = p.carDeduction && year <= CAR.lastYear;
-      const pending = (s) => (deductible ? t.ord * Math.max(0, Math.min(s.yrInterest, CAR.max) - reduction) : 0);
-      gain.push(pay.mm - pay.bal + pending(pay) - (keep.mm - keep.bal + pending(keep)));
+  // Month-by-month schedule. lump: extra principal paid today (before the first payment).
+  // extra: extra principal paid with every monthly payment. Each row:
+  //   { month, begin, interest, scheduled, extra, payment, end }
+  // The scheduled payment never exceeds what is owed, so the last payment can be smaller.
+  // Returns { error } if the payment does not cover the interest.
+  function schedule({ balance, apr, payment, lump = 0, extra = 0 }) {
+    const r = apr / 12;
+    const rows = [];
+    let bal = Math.max(0, balance - Math.max(0, lump));
+    let totalInterest = 0, totalPaid = 0;
+    for (let m = 1; bal > EPS && m <= MAX_MONTHS; m++) {
+      const interest = bal * r;
+      if (payment + extra <= interest + EPS) return { error: "The payment does not cover the monthly interest, so the loan never gets paid off." };
+      const scheduled = Math.min(Math.max(0, payment - interest), bal);
+      const extraPrin = Math.min(Math.max(0, extra), bal - scheduled);
+      const pay = interest + scheduled + extraPrin;
+      const end = Math.max(0, bal - scheduled - extraPrin);
+      rows.push({ month: m, begin: bal, interest, scheduled, extra: extraPrin, payment: pay, end: end < EPS ? 0 : end });
+      totalInterest += interest;
+      totalPaid += pay;
+      bal = end < EPS ? 0 : end;
     }
-
+    if (bal > EPS) return { error: "The loan is not paid off within 100 years at this payment." };
     return {
-      rates: t, payment, prepay, gain,
-      pay, keep,
-      parts: {
-        interestSaved: keep.interest - pay.interest,
-        mmGivenUp: pay.earned - keep.earned, // usually negative
-        deductionGivenUp: pay.deduction - keep.deduction, // negative or zero
-      },
-      net: gain[N],
-      monthsEarlier: N - (pay.payoff ?? N),
-      mmGrossRate: mmGross * 12,
+      rows, months: rows.length, totalInterest, totalPaid: totalPaid + Math.min(lump, balance),
+      finalPayment: rows.length ? rows[rows.length - 1].payment : 0,
     };
   }
 
-  // Year-1 after-tax cost of the car loan: APR reduced by the deduction actually usable in year 1.
-  function carAfterTaxRate(p) {
-    if (!p.carDeduction || p.startYear > CAR.lastYear) return p.apr;
-    const t = taxRates(p.status, p.magi);
-    let bal = p.balance, interest = 0;
-    const payment = amortPayment(p.balance, p.apr, p.months);
-    for (let m = 0; m < Math.min(12, p.months); m++) {
-      const i = (bal * p.apr) / 12;
-      interest += i;
-      bal -= payment - i;
+  // Incremental cash flows of a strategy versus the baseline, from the household's point of view:
+  // c[0] = −lump; c[k] = baseline payment in month k − strategy payment in month k.
+  // Paying extra makes early flows negative; once the strategy's loan is gone, the baseline
+  // payments it no longer has to make are positive flows. This is the money that could otherwise
+  // sit in the money market, so its IRR is the return earned by paying extra.
+  function incrementalFlows(base, scen, lump) {
+    const n = Math.max(base.months, scen.months);
+    const c = new Array(n + 1).fill(0);
+    c[0] = -Math.min(lump, base.rows.length ? base.rows[0].begin : 0);
+    for (let k = 1; k <= n; k++) {
+      const b = base.rows[k - 1] ? base.rows[k - 1].payment : 0;
+      const s = scen.rows[k - 1] ? scen.rows[k - 1].payment : 0;
+      c[k] = b - s;
     }
-    if (interest <= 0) return p.apr;
-    const ded = Math.max(0, Math.min(interest, CAR.max) - carPhaseReduction(p.status, p.magi));
-    return p.apr * (1 - (t.ord * ded) / interest);
+    return c;
   }
 
-  root.CarCalc = { CAR, taxRates, carPhaseReduction, amortPayment, simulate, carAfterTaxRate };
+  const npv = (c, i) => c.reduce((s, x, k) => s + x / Math.pow(1 + i, k), 0);
+
+  // Monthly IRR by bisection. Returns null unless the flows have exactly one sign change
+  // (negative first, then positive), which guarantees a single IRR, and the root is bracketed.
+  function irr(c) {
+    const nz = c.filter((x) => Math.abs(x) > 1e-7);
+    if (nz.length < 2) return null;
+    let changes = 0;
+    for (let k = 1; k < nz.length; k++) if (Math.sign(nz[k]) !== Math.sign(nz[k - 1])) changes++;
+    if (changes !== 1 || nz[0] > 0) return null;
+    let lo = -0.99, hi = 1; // monthly rates
+    let flo = npv(c, lo), fhi = npv(c, hi);
+    if (!(flo > 0 && fhi < 0)) return null;
+    for (let it = 0; it < 200 && hi - lo > 1e-13; it++) {
+      const mid = (lo + hi) / 2;
+      const f = npv(c, mid);
+      if (f > 0) { lo = mid; flo = f; } else { hi = mid; fhi = f; }
+    }
+    return (lo + hi) / 2;
+  }
+
+  // Loan inputs: { balance, apr, months, payment (0 = calculated) }.
+  function basePayment(p) {
+    return p.payment > 0 ? p.payment : amortPayment(p.balance, p.apr, p.months);
+  }
+
+  // Largest extra amount that still makes sense: the whole balance (lump), or enough to pay the
+  // loan off with the next payment (monthly).
+  function maxAmount(p, mode) {
+    if (mode === "lump") return p.balance;
+    return Math.max(0, p.balance * (1 + p.apr / 12) - basePayment(p));
+  }
+
+  // Everything about one strategy: schedules, savings, and the annualized IRR of paying extra.
+  function analyze(p, mode, amount) {
+    const payment = basePayment(p);
+    const base = schedule({ balance: p.balance, apr: p.apr, payment });
+    if (base.error) return { error: base.error };
+    amount = Math.max(0, Math.min(amount, maxAmount(p, mode)));
+    const scen = schedule({
+      balance: p.balance, apr: p.apr, payment,
+      lump: mode === "lump" ? amount : 0, extra: mode === "monthly" ? amount : 0,
+    });
+    if (scen.error) return { error: scen.error };
+    const flows = incrementalFlows(base, scen, mode === "lump" ? amount : 0);
+    const m = amount > 0 ? irr(flows) : null;
+    return {
+      payment, base, scen, amount, flows,
+      interestSaved: base.totalInterest - scen.totalInterest,
+      monthsSaved: base.months - scen.months,
+      irrAnnual: m === null ? null : m * 12,
+    };
+  }
+
+  // Future value, at the loan's original payoff, of the extra-payment strategy compared with
+  // keeping the money in the money market: incremental flows compounded at the after-tax yield.
+  function advantageAtBaseEnd(a, mmAfter) {
+    const i = mmAfter / 12, n = a.base.months;
+    return a.flows.reduce((s, x, k) => s + x * Math.pow(1 + i, n - k), 0);
+  }
+
+  // Generic break-even search: the amount in (0, hi] where returnAt(amount) equals target.
+  // Scans for a sign change of returnAt − target, then bisects. Reports when the return does not
+  // depend on the amount (no unique answer), or when no crossing exists in the range.
+  function solveBreakEven(returnAt, target, hi, steps = 60) {
+    if (!(hi > 0)) return { status: "none", reason: "range" };
+    const xs = [], fs = [];
+    for (let k = 1; k <= steps; k++) {
+      const x = (hi * k) / steps, r = returnAt(x);
+      if (r === null || !isFinite(r)) continue;
+      xs.push(x);
+      fs.push(r - target);
+    }
+    if (fs.length < 2) return { status: "none", reason: "undefined" };
+    const min = Math.min(...fs), max = Math.max(...fs);
+    if (max - min < 1e-7) {
+      return Math.abs(fs[0]) < 1e-5
+        ? { status: "every", rate: fs[0] + target }
+        : { status: "flat", rate: fs[0] + target };
+    }
+    for (let k = 1; k < fs.length; k++) {
+      if (Math.sign(fs[k]) !== Math.sign(fs[k - 1]) || fs[k] === 0) {
+        let lo = xs[k - 1], hiX = xs[k], flo = fs[k - 1];
+        for (let it = 0; it < 100 && hiX - lo > 0.005; it++) {
+          const mid = (lo + hiX) / 2, f = returnAt(mid) - target;
+          if (Math.sign(f) === Math.sign(flo)) { lo = mid; flo = f; } else hiX = mid;
+        }
+        return { status: "found", amount: (lo + hiX) / 2 };
+      }
+    }
+    return { status: "none", reason: "no-crossing" };
+  }
+
+  function breakEven(p, mode, mmAfter) {
+    return solveBreakEven((x) => analyze(p, mode, x).irrAnnual, mmAfter, maxAmount(p, mode));
+  }
+
+  const afterTaxYield = (y, t) => y * (1 - t);
+  // Before-tax yield needed to match the loan APR after tax; null when the tax rate is 100%+.
+  const requiredPreTax = (apr, t) => (t < 1 ? apr / (1 - t) : null);
+
+  root.CarCalc = {
+    amortPayment, schedule, incrementalFlows, npv, irr, basePayment, maxAmount, analyze,
+    advantageAtBaseEnd, solveBreakEven, breakEven, afterTaxYield, requiredPreTax,
+  };
 })(this);

@@ -11,98 +11,128 @@
   </style>
 </head>
 <body>
-  <h1>Car loan vs. money market: tests</h1>
+  <h1>Car loan payoff calculator: tests</h1>
   <p id="summary"></p>
   <ol id="out"></ol>
-  <script src="../marriage/tax.js"></script>
   <script src="calc.js"></script>
   <script>
   (function () {
     "use strict";
     const C = window.CarCalc;
     const results = [];
-    const check = (name, got, want, tol) =>
-      results.push({ name, got, want, ok: typeof want === "boolean" ? got === want : Math.abs(got - want) <= tol });
-    const base = { balance: 25000, apr: 0.07, months: 60, mmRate: 0.04, status: "single", magi: 90000, carDeduction: false, startYear: 2026, startMonth: 9 };
+    const check = (name, got, want, tol = 0) =>
+      results.push({ name, got, want, ok: typeof want === "number" ? got !== null && Math.abs(got - want) <= tol : got === want });
+    const loan = { balance: 25000, apr: 0.06, months: 60, payment: 0 };
 
-    // $25,000 at 7% over 60 months: $495.03/month (standard amortization).
-    check("Payment: $25k, 7%, 60 months", C.amortPayment(25000, 0.07, 60), 495.03, 0.005);
-
-    // No prepayment: no difference.
-    check("Prepay $0: no gain", C.simulate(base, 0).net, 0, 1e-9);
-
-    // 0% money market: the gain is exactly the interest saved.
+    // Amortization: $25,000 at 6% over 60 months -> $483.32/month, $3,999.20 total interest
+    // (standard amortization tables).
     {
-      const r = C.simulate({ ...base, mmRate: 0 }, 10000);
-      check("0% money market: gain = interest saved", r.net, r.parts.interestSaved, 1e-6);
-      check("0% money market: nothing given up", r.parts.mmGivenUp, 0, 1e-9);
+      const a = C.analyze(loan, "monthly", 0);
+      check("Payment: $25k, 6%, 60 months", a.payment, 483.32, 0.005);
+      check("Baseline: 60 payments", a.base.months, 60);
+      check("Baseline total interest", a.base.totalInterest, 3999.20, 0.05);
+      check("Balance never negative", a.base.rows.every((r) => r.end >= 0), true);
+      check("Final payment does not exceed what is owed", Math.abs(a.base.finalPayment - (a.base.rows.at(-1).begin + a.base.rows.at(-1).interest)) < 1e-6, true);
+      check("Rows: end = begin − scheduled − extra", a.base.rows.every((r) => Math.abs(r.begin - r.scheduled - r.extra - r.end) < 1e-6), true);
+      // 6. Zero extra: nothing saved, no IRR.
+      check("Zero extra: interest saved = 0", a.interestSaved, 0, 1e-9);
+      check("Zero extra: months saved = 0", a.monthsSaved, 0);
+      check("Zero extra: no IRR shown", a.irrAnnual, null);
     }
 
-    // After-tax money market rate equal to the loan rate: no difference.
-    // Single, $50k MAGI -> 12% bracket, no NIIT. Money market 7% / 0.88 after tax = 7%.
+    // Small exact case: $1,200 at 0%, $100/month; $300 extra each month -> paid off in 3 months.
     {
-      const p = { ...base, magi: 50000, mmRate: 0.07 / 0.88 };
-      check("12% bracket at $50k single", C.taxRates("single", 50000).mm, 0.12, 1e-12);
-      check("Equal after-tax rates: no gain", C.simulate(p, 10000).net, 0, 0.01);
+      const a = C.analyze({ balance: 1200, apr: 0, months: 12, payment: 0 }, "monthly", 300);
+      check("0% loan, $100 + $300/month: paid off in 3 months", a.scen.months, 3);
+      check("0% loan: 9 months saved", a.monthsSaved, 9);
+      check("0% loan: IRR of paying extra is 0%", a.irrAnnual, 0, 1e-9);
     }
 
-    // Parts add up to the net gain, with NIIT and the car deduction on.
+    // The return on paying extra equals the loan rate for any amount (each prepaid dollar avoids
+    // interest at APR/12 per month): independent check via NPV at the loan rate = 0.
     {
-      const p = { ...base, status: "mfj", magi: 260000, carDeduction: true, startMonth: 0 };
-      const r = C.simulate(p, 15000);
-      const sum = r.parts.interestSaved + r.parts.mmGivenUp + r.parts.deductionGivenUp;
-      check("Waterfall parts add up to the net gain", sum, r.net, 1e-6);
-      check("NIIT applies above $250k MFJ: 24% + 3.8%", C.taxRates("mfj", 260000).mm, 0.278, 1e-12);
+      for (const [mode, amt] of [["monthly", 50], ["monthly", 400], ["lump", 1000], ["lump", 15000]]) {
+        const a = C.analyze(loan, mode, amt);
+        check(`${mode} $${amt}: IRR = 6.00% APR`, a.irrAnnual, 0.06, 1e-9);
+        check(`${mode} $${amt}: NPV of flows at APR/12 = 0`, C.npv(a.flows, 0.005), 0, 1e-6);
+        check(`${mode} $${amt}: interest saved = baseline − scenario`, a.interestSaved, a.base.totalInterest - a.scen.totalInterest, 1e-9);
+      }
     }
 
-    // Car deduction: counted for 2028, not for 2029 and later.
+    // 7. Lump sum equal to the balance: no payments left, all interest saved.
     {
-      const p = { ...base, carDeduction: true, startYear: 2028, startMonth: 0, months: 24 };
-      const r = C.simulate(p, 0);
-      check("Car deduction counted in 2028", r.keep.deduction > 0, true);
-      check("No car deduction from 2029", C.simulate({ ...p, startYear: 2029 }, 0).keep.deduction, 0, 0);
-      // 2028 only: 22% bracket at $90k single times the 2028 interest.
-      let bal = p.balance, i2028 = 0;
-      const pay = C.amortPayment(p.balance, p.apr, p.months);
-      for (let m = 0; m < 12; m++) { const i = bal * p.apr / 12; i2028 += i; bal -= pay - i; }
-      check("2028 deduction value = 22% of 2028 interest", r.keep.deduction, 0.22 * i2028, 1e-6);
+      const a = C.analyze(loan, "lump", 25000);
+      check("Lump = balance: 0 months left", a.scen.months, 0);
+      check("Lump = balance: all interest saved", a.interestSaved, a.base.totalInterest, 1e-6);
+      check("Lump = balance: 60 months saved", a.monthsSaved, 60);
+      check("Lump = balance: IRR = APR", a.irrAnnual, 0.06, 1e-9);
     }
 
-    // Phaseout: single $140k -> $8,000 reduction wipes out about $1,500 of interest.
-    check("Phaseout reduction at $140k single", C.carPhaseReduction("single", 140000), 8000, 0);
-    check("Phased out: no deduction value", C.simulate({ ...base, magi: 140000, carDeduction: true }, 0).keep.deduction, 0, 0);
-
-    // Paying off everything now: done 60 months early and all interest saved.
+    // 8. Extra that pays the loan off with the next payment.
     {
-      const r = C.simulate(base, 25000);
-      check("Full prepay: 60 months early", r.monthsEarlier, 60, 0);
-      check("Full prepay: saves all scheduled interest", r.parts.interestSaved, 495.0308 * 60 - 25000, 0.5);
+      const max = C.maxAmount(loan, "monthly");
+      check("Max monthly extra = balance × (1 + r) − payment", max, 25000 * 1.005 - 483.3203, 0.01);
+      const a = C.analyze(loan, "monthly", max);
+      check("Max monthly extra: paid off in 1 month", a.scen.months, 1);
+      check("Max monthly extra: final payment = balance + one month's interest", a.scen.finalPayment, 25125, 0.01);
+      const over = C.analyze(loan, "monthly", max + 5000);
+      check("Extra above the max is capped (no negative balance)", over.scen.rows[0].end, 0, 1e-9);
     }
 
-    // Monthly extra: $12,000 at 0% over 12 months ($1,000/mo) + $1,000/mo extra -> paid off after
-    // month 6, 6 months early; with a 0% money market nothing is gained or lost.
+    // IRR on a known cash flow: −100 now, +110 in 12 months -> (1.1)^(1/12) − 1 per month.
     {
-      const p = { ...base, balance: 12000, apr: 0, months: 12, mmRate: 0 };
-      const r = C.simulate(p, 0, 1000);
-      check("Monthly extra: paid off 6 months early", r.monthsEarlier, 6, 0);
-      check("Monthly extra, 0% loan and 0% money market: no gain", r.net, 0, 1e-9);
-    }
-    {
-      const r = C.simulate({ ...base, mmRate: 0 }, 0, 200);
-      check("Monthly extra, 0% money market: gain = interest saved", r.net, r.parts.interestSaved, 1e-6);
-      const q = C.simulate({ ...base, status: "mfj", magi: 260000, carDeduction: true, startMonth: 0 }, 0, 300);
-      check("Monthly extra: waterfall parts add up", q.parts.interestSaved + q.parts.mmGivenUp + q.parts.deductionGivenUp, q.net, 1e-6);
-      check("Monthly extra at equal after-tax rates: no gain",
-        C.simulate({ ...base, magi: 50000, mmRate: 0.07 / 0.88 }, 0, 300).net, 0, 0.01);
+      const c = [-100, ...new Array(11).fill(0), 110];
+      check("IRR of −100 / +110 a year later", C.irr(c), Math.pow(1.1, 1 / 12) - 1, 1e-10);
+      check("No IRR for flows with two sign changes", C.irr([-100, 230, -132]), null);
+      check("No IRR for all-positive flows", C.irr([10, 10]), null);
     }
 
-    // Prepaying beats investing when the loan rate is above the after-tax money market rate.
-    check("7% loan vs 4% money market: paying extra wins", C.simulate(base, 10000).net > 0, true);
-    check("3% loan vs 5% money market at 12%: investing wins", C.simulate({ ...base, apr: 0.03, mmRate: 0.05, magi: 50000 }, 10000).net < 0, true);
+    // Rates: 6% APR, 24% tax, 5% money market -> 3.80% after tax; 7.89% needed before tax.
+    check("After-tax yield: 5% at 24%", C.afterTaxYield(0.05, 0.24), 0.038, 1e-12);
+    check("Required before-tax yield: 6% at 24%", C.requiredPreTax(0.06, 0.24), 0.078947, 1e-6);
+    // 9. Tax rate zero.
+    check("Tax 0%: after-tax = before-tax", C.afterTaxYield(0.05, 0), 0.05, 1e-12);
+    check("Tax 0%: required = APR", C.requiredPreTax(0.06, 0), 0.06, 1e-12);
+    // 10. Tax rate near and at 100%.
+    check("Tax 99%: after-tax yield 0.05%", C.afterTaxYield(0.05, 0.99), 0.0005, 1e-12);
+    check("Tax 99%: required before-tax yield 600%", C.requiredPreTax(0.06, 0.99), 6, 1e-9);
+    check("Tax 100%: required yield undefined", C.requiredPreTax(0.06, 1), null);
+
+    // Break-even: the return is the same for every amount, so no amount is reported.
+    // 1. Loan rate above the after-tax yield (6% vs 3.8%).
+    check("APR > after-tax yield: no break-even amount (flat)", C.breakEven(loan, "monthly", 0.038).status, "flat");
+    // 2. Loan rate below (6% vs 7%).
+    check("APR < after-tax yield: no break-even amount (flat)", C.breakEven(loan, "lump", 0.07).status, "flat");
+    // 3. Equal rates: every amount is at break-even.
+    check("APR = after-tax yield: every amount breaks even", C.breakEven(loan, "monthly", 0.06).status, "every");
+    // 11. Short term: 1 month left.
+    {
+      const p = { balance: 1000, apr: 0.06, months: 1, payment: 0 };
+      check("1 month left: payment clears the loan", C.analyze(p, "monthly", 0).base.months, 1);
+      check("1 month left: no room for a monthly extra", C.breakEven(p, "monthly", 0.04).status, "none");
+      check("1 month left: lump sum IRR = APR", C.analyze(p, "lump", 500).irrAnnual, 0.06, 1e-9);
+    }
+    // 12. The solver finds a crossing when the return does depend on the amount, and reports none
+    //     when there is no crossing (synthetic return curves).
+    {
+      const f = C.solveBreakEven((x) => 0.02 + x / 10000, 0.05, 1000); // crosses at x = 300
+      check("Solver: finds the crossing at 300", f.amount, 300, 0.01);
+      check("Solver: no crossing -> status none", C.solveBreakEven((x) => 0.02 + x / 1e6, 0.05, 1000).status, "none");
+      check("Solver: undefined returns -> status none", C.solveBreakEven(() => null, 0.05, 1000).status, "none");
+    }
+    // Payment too small to cover interest.
+    check("Payment below the interest: error", typeof C.analyze({ ...loan, payment: 100 }, "monthly", 0).error, "string");
+
+    // Advantage over the money market at the original end date: 0% money market -> equals interest saved.
+    {
+      const a = C.analyze(loan, "lump", 10000);
+      check("0% money market: advantage = interest saved", C.advantageAtBaseEnd(a, 0), a.interestSaved, 1e-6);
+      check("Money market at the loan rate: no advantage", C.advantageAtBaseEnd(a, 0.06), 0, 1e-6);
+    }
 
     document.getElementById("out").innerHTML = results.map((r) =>
-      `<li class="${r.ok ? "pass" : "fail"}">${r.ok ? "PASS" : "FAIL"}: ${r.name} <code>got ${typeof r.got === "number" ? r.got.toFixed(4) : r.got}</code>` +
-      (typeof r.want === "number" ? ` <code>expected ${r.want.toFixed(4)}</code>` : "") + "</li>").join("");
+      `<li class="${r.ok ? "pass" : "fail"}">${r.ok ? "PASS" : "FAIL"}: ${r.name} <code>got ${typeof r.got === "number" ? r.got.toFixed(6) : r.got}</code>` +
+      (typeof r.want === "number" ? ` <code>expected ${r.want.toFixed(6)}</code>` : ` <code>expected ${r.want}</code>`) + "</li>").join("");
     const passed = results.filter((r) => r.ok).length;
     document.getElementById("summary").textContent = `${passed} / ${results.length} passed`;
   })();

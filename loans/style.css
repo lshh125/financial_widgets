@@ -3,24 +3,52 @@
 #viz { grid-template-columns: minmax(0, 1fr); }
 .card { padding: 12px 16px; min-width: 0; }
 .card h2 { margin: 2px 0 6px; }
-.card h3 { margin-top: 16px; }
-.sub.small { font-size: 12.5px; margin-bottom: 6px; }
-.headline { font-size: 16px; margin: 4px 0 6px; line-height: 1.4; }
+.headline { font-size: 15px; margin: 4px 0 8px; line-height: 1.45; }
 .chart { min-height: 120px; }
 #mmRefresh { margin-top: 6px; }
 aside > button#reset { margin: 10px 0; }
 
-.kpis { display: grid; gap: 10px; margin: 6px 0 8px; }
-.kpis.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Tables */
+.tablewrap { overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table.data th, table.data td { padding: 5px 10px; border-bottom: 1px solid var(--border); text-align: right; }
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data th { font-weight: 600; font-size: 12.5px; color: var(--muted); }
+table.rates { max-width: 520px; }
+table.rates caption { caption-side: bottom; text-align: left; font-size: 13px; color: var(--muted); padding-top: 6px; }
+
+/* Payment-type selector */
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 4px 0 8px; }
+.seg label { display: flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; font-size: 13.5px; }
+.seg label + label { border-left: 1px solid var(--border); }
+.seg label:has(input:checked) { background: #eef2f8; font-weight: 600; }
+#amountField { max-width: 420px; }
+.be { background: #f6f7f9; border-radius: 8px; padding: 4px 12px; margin: 8px 0; }
+.be p { margin: 8px 0; line-height: 1.45; }
+.explain summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+.explain ul { margin: 6px 0 0; padding-left: 20px; font-size: 13px; color: var(--muted); }
+.explain li { margin-bottom: 4px; }
+
+/* Result cards */
+.kpis { display: grid; gap: 10px; margin: 6px 0 10px; }
+.kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .kpis > div { border: 1px solid var(--border); border-top: 4px solid var(--c); border-radius: 8px; padding: 8px 10px; }
 .kpis span { display: block; font-size: 12.5px; color: var(--muted); }
 .kpis b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
 .kpis small { color: var(--muted); font-size: 12px; }
+.compare { line-height: 1.5; margin: 6px 0 10px; }
 
+@media (max-width: 1100px) {
+  .kpis.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 700px) {
   .card { padding: 10px; }
   .kpis { gap: 6px; }
   .kpis > div { padding: 6px 8px; }
   .kpis b { font-size: 16px; }
   .kpis small { font-size: 11px; }
+  .seg { display: flex; }
+  .seg label { flex: 1; padding: 8px; justify-content: center; text-align: center; }
+  table.data { font-size: 12.5px; }
+  table.data th, table.data td { padding: 4px 6px; }
 }
