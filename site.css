@@ -27,5 +27,7 @@
 .topbar nav a[aria-current="page"] { color: #1d2330; background: #f6f7f9; font-weight: 600; }
 
 @media (max-width: 600px) {
-  .topbar { padding: 0 16px; gap: 12px; }
+  .topbar { padding: 0 8px; gap: 8px; }
+  .topbar .brand { display: none; }
+  .topbar nav a { padding: 8px 10px; }
 }

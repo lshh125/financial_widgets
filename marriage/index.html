@@ -42,8 +42,8 @@
         <button id="reset" type="button">Reset to defaults</button>
       </section>
       <div id="people"></div>
-      <section class="notes">
-        <h2>Assumptions</h2>
+      <details class="panel notes" open>
+        <summary><h2>Assumptions</h2></summary>
         <ul>
           <li>Standard deduction only ($16,100 single, $32,200 joint). No credits, no state tax.</li>
           <li>Investment income (short-term gains, dividends, interest) is taxed as ordinary income, is not
@@ -56,7 +56,7 @@
             limit per person, $4,400 (+$1,000 age 55+); two self-only limits (~$8,800) approximate the $8,750
             family limit.</li>
         </ul>
-      </section>
+      </details>
     </aside>
 
     <section id="viz">
@@ -64,6 +64,12 @@
       <div id="detail" class="detail"><p class="hint">Click a cell to see the full breakdown.</p></div>
     </section>
   </main>
+
+  <div id="tapcard" class="tapcard" hidden>
+    <button id="tapcard-close" type="button" aria-label="Close">×</button>
+    <div class="body"></div>
+    <a href="#detail">Full breakdown ↓</a>
+  </div>
 
   <script src="tax.js"></script>
   <script src="app.js"></script>

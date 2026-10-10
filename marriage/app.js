@@ -12,7 +12,7 @@
       title: "Income range",
       sliders: [
         { key: "min", label: "Min income", min: 0, max: 1000000, step: 5000, def: 50000, fmt: money },
-        { key: "max", label: "Max income", min: 10000, max: 2000000, step: 10000, def: 500000, fmt: money },
+        { key: "max", label: "Max income", min: 10000, max: 2000000, step: 10000, def: 400000, fmt: money },
         { key: "step", label: "Increment", min: 1000, max: 100000, step: 1000, def: 25000, fmt: money },
       ],
     },
@@ -39,8 +39,13 @@
     { id: "B", name: "Person B" },
   ];
 
+  // On touch devices Plotly's own touch handlers block page scrolling, so the chart is
+  // rendered static there and taps are mapped to cells by hand (see onTap).
+  const TOUCH = window.matchMedia("(hover: none), (pointer: coarse)").matches;
+
   const state = {};
   let selected = null; // { incA, incB } of clicked cell
+  let grid = null; // { xs, ys, custom } from the last render, for tap lookups
 
   function defaults() {
     for (const p of PEOPLE) {
@@ -56,10 +61,12 @@
     host.innerHTML = "";
     for (const p of PEOPLE) {
       const other = PEOPLE.find((q) => q.id !== p.id);
-      const sec = document.createElement("section");
+      const sec = document.createElement("details");
+      sec.className = "panel";
+      sec.open = true;
       sec.innerHTML =
-        `<div class="person-head"><h2>${p.name}</h2>` +
-        `<button type="button" class="copy">Copy from ${other.name}</button></div>`;
+        `<summary><h2>${p.name}</h2></summary>` +
+        `<button type="button" class="copy">Copy from ${other.name}</button>`;
       sec.querySelector(".copy").addEventListener("click", () => {
         state[p.id] = { ...state[other.id] };
         syncControls();
@@ -198,7 +205,9 @@
     // but widens if needed to fit the numbers; the panel scrolls horizontally in that case.
     const chartEl = document.getElementById("chart");
     const wrapEl = document.getElementById("chartWrap");
-    const MARGIN = { l: 80, r: 130, t: 30, b: 70 }; // right margin holds the colorbar
+    // Wide screens: colorbar in the right margin. Narrow screens: colorbar under the chart.
+    const narrow = window.innerWidth < 700;
+    const MARGIN = narrow ? { l: 66, r: 12, t: 12, b: 120 } : { l: 80, r: 130, t: 30, b: 70 };
     const height = Math.max(360, window.innerHeight - 40);
     const cellH = (height - MARGIN.t - MARGIN.b) / ys.length;
     const fitW = (wrapEl.clientWidth - MARGIN.l - MARGIN.r) / xs.length;
@@ -227,44 +236,101 @@
       xgap: cell > 12 ? 1 : 0,
       ygap: cell > 12 ? 1 : 0,
       colorbar: {
-        title: { text: mode === "pct" ? "Savings<br>(% of tax)" : "Savings ($)", side: "right" },
+        title: {
+          text: mode === "pct" ? "Savings (% of tax)" : "Savings ($)",
+          side: narrow ? "top" : "right",
+        },
         tickformat: mode === "pct" ? "+.1f" : "$,.0f",
         ticksuffix: mode === "pct" ? "%" : "",
+        ...(narrow && {
+          orientation: "h",
+          thickness: 12,
+          x: 0.5,
+          xanchor: "center",
+          y: -62 / (height - MARGIN.t - MARGIN.b),
+          yanchor: "top",
+        }),
       },
-      hovertemplate:
-        "<b>Person A income:</b> %{customdata[0]}<br>" +
-        "<b>Person B income:</b> %{customdata[1]}<br>" +
-        "<b>Combined income:</b> %{customdata[2]}<br>" +
-        "──────────────<br>" +
-        "Tax if single, A: %{customdata[3]}<br>" +
-        "Tax if single, B: %{customdata[4]}<br>" +
-        "<b>Total if single:</b> %{customdata[5]}<br>" +
-        "<b>Total if married (joint):</b> %{customdata[6]}<br>" +
-        "──────────────<br>" +
-        "<b>Difference:</b> %{customdata[7]}<br>" +
-        "<b>Relative:</b> %{customdata[8]} of unmarried tax" +
-        "<extra></extra>",
+      hovertemplate: summaryHtml((i) => `%{customdata[${i}]}`) + "<extra></extra>",
     };
+    grid = { xs, ys, custom };
 
+    // Outline the selected cell.
+    const shapes = [];
+    if (selected) {
+      const hx = state.A.step / 2, hy = state.B.step / 2;
+      shapes.push({
+        type: "rect", xref: "x", yref: "y", line: { color: "#1d2330", width: 2.5 },
+        x0: selected.incA - hx, x1: selected.incA + hx, y0: selected.incB - hy, y1: selected.incB + hy,
+      });
+    }
+
+    // Zoom/pan disabled: clicking or dragging never changes the view.
     const layout = {
       width,
       height,
       margin: MARGIN,
-      xaxis: { title: { text: "Person A income" }, tickprefix: "$", tickformat: "~s", constrain: "domain" },
-      yaxis: { title: { text: "Person B income" }, tickprefix: "$", tickformat: "~s" },
+      dragmode: false,
+      shapes,
+      xaxis: {
+        title: { text: "Person A income" }, tickprefix: "$", tickformat: "~s", constrain: "domain", fixedrange: true,
+      },
+      yaxis: { title: { text: "Person B income" }, tickprefix: "$", tickformat: "~s", fixedrange: true },
       hoverlabel: { align: "left", bgcolor: "#fff", font: { size: 13, color: "#1d2330" } },
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
     };
 
-    Plotly.react(chartEl, [trace], layout, { displaylogo: false });
+    Plotly.react(chartEl, [trace], layout, { displayModeBar: false, scrollZoom: false, staticPlot: TOUCH });
     renderDetail();
+  }
+
+  // The hover/tap summary. field(i) returns the text for customdata column i.
+  function summaryHtml(field) {
+    return (
+      `<b>Person A income:</b> ${field(0)}<br>` +
+      `<b>Person B income:</b> ${field(1)}<br>` +
+      `<b>Combined income:</b> ${field(2)}<br>` +
+      "──────────────<br>" +
+      `Tax if single, A: ${field(3)}<br>` +
+      `Tax if single, B: ${field(4)}<br>` +
+      `<b>Total if single:</b> ${field(5)}<br>` +
+      `<b>Total if married (joint):</b> ${field(6)}<br>` +
+      "──────────────<br>" +
+      `<b>Difference:</b> ${field(7)}<br>` +
+      `<b>Relative:</b> ${field(8)} of unmarried tax`
+    );
+  }
+
+  function select(incA, incB) {
+    selected = { incA, incB };
+    scheduleRender();
+  }
+
+  // Touch mode: map a tap to a heatmap cell and show its summary in a bottom card.
+  function onTap(ev) {
+    const card = document.getElementById("tapcard");
+    const chartEl = document.getElementById("chart");
+    const size = chartEl._fullLayout && chartEl._fullLayout._size;
+    if (!grid || !size) return;
+    const rect = chartEl.getBoundingClientRect();
+    const x = ev.clientX - rect.left - size.l;
+    const y = ev.clientY - rect.top - size.t;
+    if (x < 0 || y < 0 || x >= size.w || y >= size.h) {
+      card.hidden = true;
+      return;
+    }
+    const i = Math.floor((x / size.w) * grid.xs.length);
+    const j = Math.floor(((size.h - y) / size.h) * grid.ys.length);
+    card.querySelector(".body").innerHTML = summaryHtml((k) => grid.custom[j][i][k]);
+    card.hidden = false;
+    select(grid.xs[i], grid.ys[j]);
   }
 
   function renderDetail() {
     const el = document.getElementById("detail");
     if (!selected) {
-      el.innerHTML = `<p class="hint">Click a cell to see the full breakdown.</p>`;
+      el.innerHTML = `<p class="hint">${TOUCH ? "Tap" : "Click"} a cell to see the full breakdown.</p>`;
       return;
     }
     const r = compare(person("A", selected.incA), person("B", selected.incB));
@@ -318,13 +384,30 @@
       syncControls();
       scheduleRender();
     });
-    window.addEventListener("resize", scheduleRender);
-    render();
-    document.getElementById("chart").on("plotly_click", (ev) => {
-      const pt = ev.points[0];
-      selected = { incA: pt.x, incB: pt.y };
-      renderDetail();
+    // Phones: start with the long control panels collapsed so the chart is reachable.
+    if (window.innerWidth < 700) {
+      document.querySelectorAll("#people details, details.notes").forEach((d) => (d.open = false));
+    }
+    // Re-render on width changes only; mobile browsers fire resize when the URL bar hides.
+    let lastW = window.innerWidth;
+    window.addEventListener("resize", () => {
+      if (window.innerWidth !== lastW) {
+        lastW = window.innerWidth;
+        scheduleRender();
+      }
     });
+    render();
+    if (TOUCH) {
+      document.getElementById("chart").addEventListener("click", onTap);
+      document.getElementById("tapcard-close").addEventListener("click", () => {
+        document.getElementById("tapcard").hidden = true;
+      });
+    } else {
+      document.getElementById("chart").on("plotly_click", (ev) => {
+        const pt = ev.points[0];
+        select(pt.x, pt.y);
+      });
+    }
   }
 
   init();

@@ -26,7 +26,7 @@ h1 { margin: 0 0 4px; font-size: 22px; }
 
 main {
   display: grid;
-  grid-template-columns: 340px 1fr;
+  grid-template-columns: 340px minmax(0, 1fr);
   gap: 16px;
   padding: 8px 24px 24px;
   align-items: start;
@@ -39,13 +39,19 @@ aside, #viz > div {
 }
 
 aside { padding: 4px 16px 12px; }
-aside section { padding: 10px 0; border-bottom: 1px solid var(--border); }
-aside section:last-child { border-bottom: none; }
+aside > section, aside .panel { padding: 10px 0; border-bottom: 1px solid var(--border); }
+aside > :last-child, #people > :last-child { border-bottom: none; }
+#people { border-bottom: 1px solid var(--border); }
 h2 { font-size: 15px; margin: 4px 0 8px; }
 h3 { font-size: 12px; margin: 10px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 
-.person-head { display: flex; justify-content: space-between; align-items: center; }
-.person-head button { margin-top: 0; font-size: 12.5px; }
+/* Collapsible panels */
+.panel summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+.panel summary::-webkit-details-marker { display: none; }
+.panel summary h2 { margin: 4px 0; }
+.panel summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.panel:not([open]) summary::after { transform: rotate(-90deg); }
+.panel .copy { font-size: 12.5px; }
 
 .slider { margin: 6px 0; }
 .slider .lbl { display: flex; justify-content: space-between; font-size: 13px; }
@@ -79,8 +85,50 @@ button:hover { background: #eef2f8; }
 .detail tr.total td { font-weight: 700; }
 .detail .headline { font-size: 16px; margin: 0 0 8px; }
 
+/* Touch-mode summary card for a tapped cell */
+.tapcard {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 24px));
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  padding: 12px 16px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  z-index: 10;
+}
+.tapcard[hidden] { display: none; }
+.tapcard #tapcard-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  margin: 0;
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 10px;
+  color: var(--muted);
+}
+.tapcard a { display: inline-block; margin-top: 6px; color: var(--accent); }
+
 @media (max-width: 900px) {
-  main { grid-template-columns: 1fr; padding: 8px 16px 16px; }
+  main { grid-template-columns: minmax(0, 1fr); padding: 8px 16px 16px; }
   header { padding: 16px 16px 8px; }
   .detail { overflow-x: auto; }
+}
+
+@media (max-width: 700px) {
+  h1 { font-size: 19px; }
+  main { padding: 8px 8px 16px; }
+  .detail { padding: 10px 8px; }
+  .detail table { font-size: 12.5px; }
+  .detail th, .detail td { padding: 4px 6px; }
+  /* 16px inputs stop iOS from zooming in on focus; taller sliders are easier to grab. */
+  select { font-size: 16px; }
+  .slider input[type=range] { height: 28px; }
 }
