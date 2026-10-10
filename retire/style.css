@@ -1,0 +1,43 @@
+/* Retirement age page. Shares layout and controls with ../marriage and ../health styles. */
+
+#viz { grid-template-columns: minmax(0, 1fr); }
+.card { padding: 12px 16px; min-width: 0; }
+.card h2 { margin: 2px 0 6px; }
+.headline { font-size: 15px; margin: 4px 0 8px; line-height: 1.45; }
+.sub.small { font-size: 12.5px; margin: 4px 0; }
+aside > button#reset { margin: 10px 0; }
+
+/* Preset buttons */
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
+.presets button, button.preset { margin: 0; font-size: 12.5px; line-height: 1.3; padding: 5px 6px; }
+button.preset { width: 100%; margin-top: 4px; }
+.presets button.active, button.preset.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Starting-age toggles */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.chips label { cursor: pointer; }
+.chips input { position: absolute; opacity: 0; pointer-events: none; }
+.chips span {
+  display: inline-block; min-width: 34px; text-align: center; padding: 3px 6px; border-radius: 6px;
+  border: 2px solid var(--c); color: var(--c); font-weight: 600; font-size: 13px;
+}
+.chips input:checked + span { background: var(--c); color: #fff; }
+.chips input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 1px; }
+
+/* Tables */
+.tablewrap { overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table.data th, table.data td { padding: 5px 10px; border-bottom: 1px solid var(--border); text-align: right; }
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data th { font-weight: 600; font-size: 12.5px; color: var(--muted); }
+table.data tr.best td { font-weight: 700; background: #f3f7ee; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--c); margin-right: 6px; }
+#decision, #ranges { max-width: 760px; }
+#ranges table { max-width: 520px; }
+
+@media (max-width: 700px) {
+  .card { padding: 10px; }
+  table.data { font-size: 12.5px; }
+  table.data th, table.data td { padding: 4px 6px; }
+  .chips span { min-width: 38px; padding: 6px; }
+}

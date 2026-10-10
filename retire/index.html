@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Social Security Claiming Age</title>
+  <link rel="stylesheet" href="../site.css" />
+  <link rel="stylesheet" href="../marriage/style.css" />
+  <link rel="stylesheet" href="../health/style.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">Financial Widgets</span>
+    <nav>
+      <a href="../">Home</a>
+      <a href="../marriage/">Marriage benefit/penalty</a>
+      <a href="../health/">Health plans</a>
+      <a href="../loans/">Car loan vs. savings</a>
+      <a href="./" aria-current="page">Retirement age</a>
+    </nav>
+  </header>
+
+  <header>
+    <h1>When to Start Social Security</h1>
+    <p class="sub">
+      The accumulated value of Social Security checks from age 62, for each starting age from 62 to 70, for
+      someone with maxed-out earnings. Each check keeps growing at a "value rate" you choose, whether it is
+      saved or spent, since money spent now saves buying the same things later at higher prices.
+      Taxes and other benefits are not included.
+    </p>
+    <p class="sub">Not financial advice; accuracy is not guaranteed. See the <a href="../">disclaimer</a>.</p>
+  </header>
+
+  <main>
+    <aside id="controls">
+      <section>
+        <h2>Benefit</h2>
+        <div id="benefitFields"></div>
+        <button type="button" id="colaAvg" class="preset">Use 20-year COLA average (2.53%)</button>
+      </section>
+      <section>
+        <h2>Value rate</h2>
+        <div id="rateFields"></div>
+        <div id="ratePresets" class="presets"></div>
+        <p class="note">Compound (geometric) yearly averages for 2006–2025. Sources: Damodaran, NYU Stern (returns); BLS (CPI-U).</p>
+      </section>
+      <section>
+        <h2>Display</h2>
+        <div class="row"><span>Starting ages</span></div>
+        <div id="ageChips" class="chips"></div>
+        <div id="displayFields"></div>
+      </section>
+      <button id="reset" type="button">Reset to defaults</button>
+      <details class="panel notes">
+        <summary><h2>Assumptions</h2></summary>
+        <ul>
+          <li>Full retirement age 67 (born in 1960 or later). Starting earlier cuts the benefit by 5/9 of 1% a
+            month for the first 36 months and 5/12 of 1% a month beyond that (70% at 62). Waiting past 67
+            adds 2/3 of 1% a month, up to 124% at 70.</li>
+          <li>The benefit at full retirement age is in today's dollars at age 62. COLAs raise it every year
+            from 62 on, including years before you start.</li>
+          <li>Each month's check arrives at the end of the month. Value grows monthly at the yearly value
+            rate's monthly equivalent.</li>
+          <li>Not included: income tax on benefits, the earnings test before full retirement age, spousal and
+            survivor benefits, and Medicare premiums.</li>
+        </ul>
+      </details>
+    </aside>
+
+    <section id="viz">
+      <div class="card">
+        <div id="chart"></div>
+        <p class="sub small">Click the chart to see which starting age comes out ahead if you collect until that age.</p>
+      </div>
+      <div class="card" id="decision"></div>
+      <div class="card">
+        <h2>Best starting age by how long you collect</h2>
+        <div id="ranges"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="tapcard" class="tapcard" hidden>
+    <button id="tapcard-close" type="button" aria-label="Close">×</button>
+    <div class="body"></div>
+    <a href="#decision">Details ↓</a>
+  </div>
+
+  <script src="calc.js"></script>
+  <script src="../loans/ui.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

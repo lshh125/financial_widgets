@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Social Security Tests</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; color: #1d2330; background: #fff; }
+    .pass { color: #23711e; } .fail { color: #b2182b; font-weight: 700; }
+    code { background: #f2f4f7; padding: 1px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Social Security claiming age: tests</h1>
+  <p id="summary"></p>
+  <ol id="out"></ol>
+  <script src="calc.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    const C = window.SSCalc;
+    const results = [];
+    const check = (name, got, want, tol = 0) =>
+      results.push({ name, got, want, ok: typeof want === "number" ? got !== null && Math.abs(got - want) <= tol : got === want });
+
+    // SSA factors with full retirement age 67: 70% at 62, 75% at 63, 80% at 64, 86.67% at 65,
+    // 93.33% at 66, 100% at 67, 108% at 68, 116% at 69, 124% at 70 (SSA's published table).
+    const want = { 62: 0.7, 63: 0.75, 64: 0.8, 65: 0.866667, 66: 0.933333, 67: 1, 68: 1.08, 69: 1.16, 70: 1.24 };
+    for (const a of C.CLAIM_AGES) check(`Claim factor at ${a}`, C.claimFactor(a), want[a], 1e-6);
+    check("No increase after 70", C.claimFactor(72), 1.24, 1e-12);
+
+    // No COLA, 0% value rate: value = checks received. Claim at 62 for 12 months: 12 × 0.7 × 1000.
+    const flat = { pia: 1000, cola: 0, rate: 0, endAge: 100 };
+    {
+      const s = C.series(62, flat);
+      check("Claim at 62: first check $700", s.check[1], 700, 1e-9);
+      check("Claim at 62: $8,400 after 12 months", s.value[12], 8400, 1e-9);
+      check("Claim at 70: nothing before 70", C.series(70, flat).value[96], 0, 0);
+      check("Claim at 70: first check $1,240", C.series(70, flat).check[97], 1240, 1e-9);
+    }
+
+    // Break-even of 62 vs 70 with no COLA and 0% rate: 0.70 m = 1.24 (m − 96) -> m = 220.4, so 70
+    // pulls ahead in month 221 (age 80 and 5 months), the commonly quoted "about 80 1/2".
+    {
+      const all = C.allSeries(flat);
+      check("62 vs 70 crossover month (0% rate, no COLA)", C.crossover(all, 62, 70, 456), 221, 0);
+      // 63 overtakes 62 when 0.70 m = 0.75 (m − 12), i.e. month 180 (age 77).
+      check("At 76: claiming at 62 is best", C.bestAt(all, 12 * 14), 62);
+      check("63 overtakes 62 after month 180", C.crossover(all, 62, 63, 456), 181, 0);
+      check("At 100: claiming at 70 is best", C.bestAt(all, 456), 70);
+    }
+
+    // COLA applied every 12 months from 62: claim at 62 with 10% COLA -> month 13 check = 700 × 1.1.
+    check("COLA after one year", C.series(62, { ...flat, cola: 0.1 }).check[13], 770, 1e-9);
+    // COLAs accrue before claiming too: claim at 67 with 10% COLA -> first check 1000 × 1.1^5.
+    check("COLAs before claiming", C.series(67, { ...flat, cola: 0.1 }).firstCheck, 1000 * Math.pow(1.1, 5), 1e-6);
+
+    // Value grows at the monthly equivalent of the yearly rate: 12% a year -> i = 1.12^(1/12) − 1.
+    // Constant $700 checks for 24 months: value = 700 × ((1 + i)^24 − 1) / i.
+    {
+      const i = Math.pow(1.12, 1 / 12) - 1;
+      check("Value of 24 checks at 12%/yr", C.series(62, { ...flat, rate: 0.12 }).value[24], 700 * (Math.pow(1 + i, 24) - 1) / i, 1e-6);
+    }
+
+    // A higher value rate favors claiming early: at 10%, 62 still beats 70 at age 100.
+    check("At a 10% rate, 62 beats 70 even at 100", C.bestAt(C.allSeries({ ...flat, rate: 0.1 }), 456) !== 70, true);
+
+    // Best ranges cover every month exactly once, in order.
+    {
+      const all = C.allSeries({ ...flat, cola: 0.025, rate: 0.025 });
+      const r = C.bestRanges(all, 456);
+      check("Best ranges start at month 1", r[0].fromMonth, 1);
+      check("Best ranges end at the last month", r.at(-1).toMonth, 456);
+      check("Best ranges are contiguous", r.every((x, k) => k === 0 || x.fromMonth === r[k - 1].toMonth + 1), true);
+    }
+
+    document.getElementById("out").innerHTML = results.map((r) =>
+      `<li class="${r.ok ? "pass" : "fail"}">${r.ok ? "PASS" : "FAIL"}: ${r.name} <code>got ${typeof r.got === "number" ? r.got.toFixed(6) : r.got}</code>` +
+      ` <code>expected ${typeof r.want === "number" ? r.want.toFixed(6) : r.want}</code></li>`).join("");
+    const passed = results.filter((r) => r.ok).length;
+    document.getElementById("summary").textContent = `${passed} / ${results.length} passed`;
+  })();
+  </script>
+</body>
+</html>
