@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Loan Payoff vs. Invest 2026</title>
+  <link rel="stylesheet" href="../site.css" />
+  <link rel="stylesheet" href="../marriage/style.css" />
+  <link rel="stylesheet" href="../health/style.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">Financial Widgets</span>
+    <nav>
+      <a href="../">Home</a>
+      <a href="../marriage/">Marriage benefit/penalty</a>
+      <a href="../health/">Health plans</a>
+      <a href="./" aria-current="page">Pay off or invest</a>
+    </nav>
+  </header>
+
+  <header>
+    <h1>Pay Off Loans or Invest? — 2026</h1>
+    <p class="sub">
+      Compares using cash to pay down loans early with investing it in a taxable brokerage account while
+      keeping scheduled payments. Both strategies get the same monthly budget; anything a strategy does not
+      need for loan payments is invested. Taxes are computed for each strategy under 2026 U.S. federal law.
+    </p>
+    <p class="sub">Not tax, legal, or investment advice; accuracy is not guaranteed. See the <a href="../">disclaimer</a>.</p>
+  </header>
+
+  <main>
+    <aside id="controls">
+      <section id="general">
+        <h2>Tax situation</h2>
+        <label class="row">Tax year <select disabled><option>2026</option></select></label>
+        <label class="row">Jurisdiction <select disabled><option>U.S. federal only</option></select></label>
+        <div id="generalFields"></div>
+        <button id="reset" type="button">Reset to defaults</button>
+      </section>
+      <details class="panel" id="cashPanel" open>
+        <summary><h2>Cash and investments</h2></summary>
+        <div id="cashFields"></div>
+      </details>
+      <details class="panel" id="strategyPanel" open>
+        <summary><h2>Strategy rules</h2></summary>
+        <div id="strategyFields"></div>
+      </details>
+      <div id="loans"></div>
+      <button id="addLoan" type="button" class="add">+ Add loan</button>
+      <details class="panel" id="heatPanel">
+        <summary><h2>Heatmap axes</h2></summary>
+        <div id="heatFields"></div>
+      </details>
+      <details class="panel notes" id="notes">
+        <summary><h2>What is modeled</h2></summary>
+        <ul>
+          <li><b>Cash flow:</b> each month both strategies have the same budget, equal to the scheduled loan
+            payments and mortgage insurance with no prepayment, plus extra savings. A payment that ends (by
+            payoff or prepayment) stays in the budget and is invested, or snowballed if you choose that.</li>
+          <li><b>Taxes:</b> each year, full 2026 federal income tax + NIIT is computed for each strategy and
+            compared with the same year without any loans or investments. This handles standard vs. itemized
+            deductions, phaseouts, the SALT cap, the $750k mortgage limit, and the 2/37 limit for the 37%
+            bracket. Tax changes are paid from, or added to, the brokerage account at year end.</li>
+          <li><b>Later years:</b> 2026 brackets and limits are held fixed (no inflation adjustment). Changes
+            already in law are applied: the car loan interest deduction ends after 2028 and the SALT cap
+            returns to $10,000 in 2030. Your other income stays the same each year.</li>
+          <li><b>Investments:</b> total return = price growth + dividends + interest. Dividends and interest
+            are taxed yearly and reinvested; tax payments are assumed to come from new shares with little
+            gain. Gains are taxed only when sold, all as long-term. Capital losses give no tax benefit here.</li>
+          <li><b>Loans:</b> monthly amortization with the contractual note rate. APR is shown for reference
+            only; fees on an existing loan are already paid. A prepayment keeps the payment and shortens the
+            loan unless you choose recast. Variable rates change once; HELOC re-draws are not modeled.</li>
+          <li><b>Not modeled:</b> state and local tax, Married Filing Separately and Head of Household,
+            income-driven repayment and forgiveness for student loans, passive-loss rules and depreciation for
+            rentals, §163(j) and self-employment tax for business loans, investment interest carryforward,
+            refinancing, and the value of having cash on hand.</li>
+          <li><b>Labels:</b> <span class="status verified">Verified rule</span> = modeled from 2026 IRS rules;
+            <span class="status simplified">Simplified</span> = a verified rule with parts left out;
+            <span class="status assumption">Your assumption</span> = your input, not a legal conclusion.</li>
+        </ul>
+      </details>
+    </aside>
+
+    <section id="viz">
+      <div id="summary" class="card"></div>
+      <div class="card">
+        <div class="cardhead">
+          <h2>Net worth over time</h2>
+          <label class="row">Show
+            <select id="view">
+              <option value="after">After tax if sold</option>
+              <option value="pre">Before selling</option>
+            </select>
+          </label>
+        </div>
+        <div id="chartA" class="chart"></div>
+      </div>
+      <div class="card">
+        <h2>Where the difference comes from</h2>
+        <p class="sub small">Invest minus Pay Off at the horizon, after tax if sold. The parts add up to the total.
+          The two tax parts are split in a fixed order (deductions first, then investment income), so how they
+          divide depends on that order; their sum does not.</p>
+        <div id="chartC" class="chart"></div>
+      </div>
+      <div class="card">
+        <h2>Break-even heatmap</h2>
+        <p class="sub small" id="heatNote"></p>
+        <div id="chartB" class="chart"></div>
+      </div>
+      <div class="card">
+        <h2>Loan comparison</h2>
+        <p class="sub small">The note rate is what the lender charges. The after-tax rate is an estimate: the note
+          rate reduced by the actual year-1 tax change from that loan's interest, with no prepayment. Click a
+          heading to sort.</p>
+        <div class="tablewrap"><table id="loanTable" class="data"></table></div>
+      </div>
+      <div class="card">
+        <h2>Risk: uncertain returns</h2>
+        <p class="sub small" id="riskNote"></p>
+        <div id="chartE" class="chart"></div>
+        <div class="tablewrap"><table id="riskTable" class="data"></table></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="tapcard" class="tapcard" hidden>
+    <button id="tapcard-close" type="button" aria-label="Close">×</button>
+    <div class="body"></div>
+  </div>
+
+  <script src="../marriage/tax.js"></script>
+  <script src="tax2026.js"></script>
+  <script src="loan.js"></script>
+  <script src="invest.js"></script>
+  <script src="sim.js"></script>
+  <script src="ui.js"></script>
+  <script src="charts.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

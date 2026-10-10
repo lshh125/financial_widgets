@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Loan Simulator Tests</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; color: #1d2330; background: #fff; }
+    .pass { color: #23711e; } .fail { color: #b2182b; font-weight: 700; }
+    li { margin: 4px 0; } code { background: #f2f4f7; padding: 1px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Loan payoff vs. invest: validation tests</h1>
+  <p>Each case lists its setup and the independently checkable expected value.</p>
+  <p id="summary"></p>
+  <ol id="out"></ol>
+
+  <script src="../marriage/tax.js"></script>
+  <script src="tax2026.js"></script>
+  <script src="loan.js"></script>
+  <script src="invest.js"></script>
+  <script src="sim.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    const S = window.LoanSim;
+    const results = [];
+    function check(name, got, want, tol, note) {
+      const ok = typeof want === "boolean" ? got === want : Math.abs(got - want) <= tol;
+      results.push({ name, ok, got, want, note });
+    }
+
+    const noTaxProfile = { status: "single", income: 20000, saltPaid: 0, otherItemized: 0 };
+    const zeroInv = { totalReturn: 0, dividendYield: 0, qualifiedPct: 1, interestYield: 0, expenseRatio: 0, volatility: 0.15 };
+    function loan(o) {
+      return Object.assign({
+        name: "L", type: "personal", balance: 10000, rate: 0.06, termMonths: 60, paymentOverride: 0,
+        variable: false, newRate: 0, changeMonth: 0, ioMonths: 0, penaltyPct: 0, penaltyFee: 0,
+        origination: "2024-01", secured: false, assetValue: 0, assetGrowth: 0, pmi: 0, pmiEndBalance: 0,
+        manualAmount: 0, tax: {},
+      }, o);
+    }
+    function inputs(o) {
+      return Object.assign({
+        profile: noTaxProfile, cash: 10000, extraMonthly: 0, horizonYears: 5, inv: zeroInv,
+        allocation: "rate", recast: false, freed: "invest", loans: [loan({})],
+      }, o);
+    }
+    const end = (r, k) => r[k].snaps.at(-1);
+    const diff = (r) => end(r, "invest").nwAfter - end(r, "payoff").nwAfter;
+
+    // 1. Standard amortization: $200,000, 6%, 30 years -> $1,199.10/month, $231,676.38 total interest.
+    {
+      const L = loan({ balance: 200000, rate: 0.06, termMonths: 360 });
+      check("Amortization: payment of $200k at 6% over 30 yr", S.amortPayment(200000, 0.06, 360), 1199.10, 0.005, "Standard formula");
+      const st = S.initLoan(L);
+      let interest = 0;
+      for (let m = 0; m < 360; m++) interest += S.stepLoan(L, st, m).interest;
+      check("Amortization: total interest over 30 yr", interest, 231676.38, 0.5, "Published amortization tables");
+      check("Amortization: balance after final payment", st.bal, 0, 1e-6);
+    }
+
+    // 2. Early repayment keeps the payment and shortens the term: $12,000, 0%, 12 months ($1,000/mo),
+    //    prepay $6,000 -> paid off after month 6, then $1,000/mo is invested for 6 months = $6,000.
+    {
+      const r = S.simulate(inputs({ cash: 6000, horizonYears: 1, loans: [loan({ balance: 12000, rate: 0, termMonths: 12 })] }));
+      check("Early payoff: payoff month after $6k prepayment", r.payoff.perLoan[0].payoffMonth, 6, 0);
+      check("Early payoff: released payments invested ($6,000)", end(r, "payoff").invValue, 6000, 0.01);
+      check("Early payoff: Invest strategy also ends with $6,000", end(r, "invest").invValue, 6000, 0.01);
+    }
+
+    // 2b. Payments released by a natural payoff are reinvested too: $12,000, 0%, 12 months, no cash,
+    //     2 years -> the $1,000/mo keeps going into investments in year 2 = $12,000.
+    {
+      const r = S.simulate(inputs({ cash: 0, horizonYears: 2, loans: [loan({ balance: 12000, rate: 0, termMonths: 12 })] }));
+      check("Natural payoff: released payments invested in year 2", end(r, "invest").invValue, 12000, 0.01);
+    }
+    // 2c. Snowball: a 0% $6,000 / 6-month loan ($1,000/mo) ends, then its $1,000 goes to a 0%
+    //     $24,000 / 24-month loan ($1,000/mo). That loan gets $2,000/mo from month 6:
+    //     6,000 paid by month 6, 18,000 left / 2,000 = 9 more months -> paid off at month 15.
+    {
+      const ls = [loan({ name: "short", balance: 6000, rate: 0, termMonths: 6 }), loan({ name: "long", balance: 24000, rate: 0, termMonths: 24 })];
+      const r = S.simulate(inputs({ cash: 0, horizonYears: 2, freed: "snowball", loans: ls }));
+      check("Snowball: second loan paid off at month 15", r.invest.perLoan[1].payoffMonth, 15, 0);
+    }
+
+    // 3. Zero-interest loan, zero return: both strategies equal.
+    {
+      const r = S.simulate(inputs({ loans: [loan({ rate: 0 })] }));
+      check("Zero-interest loan, 0% return: no difference", diff(r), 0, 0.01);
+    }
+
+    // 4. Return equal to the loan rate (6%/12 monthly = 6.1678% a year), all price growth, gains in the
+    //    0% bracket, no deduction: strategies equal. Below -> pay off wins; above -> invest wins.
+    {
+      const eq = Math.pow(1 + 0.06 / 12, 12) - 1;
+      const run = (ret) => diff(S.simulate(inputs({ inv: { ...zeroInv, totalReturn: ret } })));
+      check("Return = loan rate: no difference", run(eq), 0, 0.01, `return ${(eq * 100).toFixed(4)}%`);
+      check("Return below loan rate: Pay Off ahead", run(0.04) < 0, true);
+      check("Return above loan rate: Invest ahead", run(0.09) > 0, true);
+    }
+
+    // 5. Deduction with no incremental benefit: MFJ, $100k mortgage at 6% ($6k interest) + $10k SALT
+    //    is below the $32,200 standard deduction.
+    {
+      const prof = { status: "mfj", income: 150000, saltPaid: 10000, otherItemized: 0 };
+      const r = S.simulate(inputs({ profile: prof, cash: 20000, loans: [loan({ type: "primary", balance: 100000, rate: 0.06, termMonths: 300 })] }));
+      check("Small mortgage + standard deduction: no tax benefit (Invest)", end(r, "invest").cumDedBenefit, 0, 1e-6);
+      check("Small mortgage + standard deduction: no tax benefit (Pay Off)", end(r, "payoff").cumDedBenefit, 0, 1e-6);
+    }
+
+    // 6. Deduction with a benefit, by hand: MFJ $180k, SALT $15k, $26k mortgage interest. Itemized
+    //    $41k vs $32.2k standard -> $8.8k more deduction in the 22% bracket = $1,936.
+    {
+      const prof = { status: "mfj", income: 180000, saltPaid: 15000, otherItemized: 0 };
+      const base = S.federalTax(prof, S.emptyItems(), 2026).total;
+      const it = S.emptyItems(); it.qriInterest = 26000;
+      check("Itemizing benefit: $26k mortgage interest, MFJ $180k", base - S.federalTax(prof, it, 2026).total, 1936, 0.01);
+      // Over the $750k limit: $1M average balance -> 75% of interest counts.
+      const li = S.loanItems([loan({ type: "primary", origination: "2020-01" })], [{ interest: 60000, avgBalance: 1000000, pmi: 0 }]);
+      check("$750k limit: $60k interest on $1M balance -> $45k deductible", li.qriInterest, 45000, 0.01);
+      const g = S.loanItems([loan({ type: "primary", origination: "2015-06" })], [{ interest: 60000, avgBalance: 1000000, pmi: 0 }]);
+      check("Grandfathered (2015) loan: $1M limit -> all $60k deductible", g.qriInterest, 60000, 0.01);
+      const h = S.loanItems([loan({ type: "heloc", tax: { helocUse: "other" } })], [{ interest: 5000, avgBalance: 80000, pmi: 0 }]);
+      check("HELOC not used on the home: $0 deductible", h.qriInterest, 0, 0);
+    }
+
+    // 7. Non-deductible loan: no deduction benefit in either strategy.
+    {
+      const prof = { status: "single", income: 120000, saltPaid: 20000, otherItemized: 0 };
+      const r = S.simulate(inputs({ profile: prof, loans: [loan({ type: "personal" })] }));
+      check("Personal loan: no deduction benefit", end(r, "invest").cumDedBenefit, 0, 1e-6);
+    }
+
+    // 8. Prepayment penalty 2% of amount prepaid, $10k cash, 0% return:
+    //    principal = 10000 / 1.02 = 9803.92, penalty = 196.08.
+    {
+      const r = S.simulate(inputs({ loans: [loan({ balance: 50000, rate: 0.05, termMonths: 120, penaltyPct: 2 })] }));
+      check("Prepayment penalty paid", end(r, "payoff").cumPenalty, 10000 - 10000 / 1.02, 0.01);
+      const att = S.attribution(r);
+      check("Penalty shows in attribution", att.parts.find((p) => p.key === "penalty").value, 10000 - 10000 / 1.02, 0.01);
+    }
+
+    // 9. Gains are taxed only when realized: all price growth -> no yearly investment tax, but a
+    //    liquidation tax at the horizon (single $120k, so gains are in the 15% bracket).
+    {
+      const prof = { status: "single", income: 120000, saltPaid: 0, otherItemized: 0 };
+      const r = S.simulate(inputs({ profile: prof, inv: { ...zeroInv, totalReturn: 0.08 } }));
+      check("No yearly tax on unrealized gains", end(r, "invest").cumInvTax, 0, 1e-6);
+      const e = end(r, "invest");
+      check("Liquidation tax = 15% of gain", e.liqTax, 0.15 * (e.invValue - e.basis), 0.01);
+    }
+
+    // 10. Car loan interest deduction: counted 2026-2028, not 2029+.
+    {
+      const prof = { status: "mfj", income: 150000, saltPaid: 0, otherItemized: 0 };
+      const car = loan({ type: "auto", balance: 40000, rate: 0.08, termMonths: 72, origination: "2025-06", secured: true,
+        tax: { newVehicle: true, usAssembly: true, personalUse: true } });
+      const r = S.simulate(inputs({ profile: prof, cash: 0, horizonYears: 5, loans: [car] }));
+      const s = r.invest.snaps;
+      const yearly = (t) => s[t].cumDedBenefit - s[t - 1].cumDedBenefit;
+      check("Car loan deduction counted in 2028", yearly(3) > 0, true);
+      check("Car loan deduction ends in 2029", yearly(4), 0, 1e-6);
+      const notNew = loan({ ...car, tax: { newVehicle: false, usAssembly: true, personalUse: true } });
+      check("Used vehicle: not eligible", S.classify(notNew).cat === "none", true);
+    }
+
+    // 11. Multiple loans: highest rate first. $10k goes to the 8% loan, not the 3% loan.
+    {
+      const r = S.simulate(inputs({ loans: [loan({ name: "low", rate: 0.03 }), loan({ name: "high", rate: 0.08 })] }));
+      check("Highest rate first: 8% loan gets the cash", r.payoff.perLoan[1].prepaid, 10000, 0.01);
+      check("Highest rate first: 3% loan gets nothing", r.payoff.perLoan[0].prepaid, 0, 0.01);
+    }
+
+    // 12. Reconciliation: attribution parts add up to the net worth difference, with taxes,
+    //     mortgage insurance, snowball, recast, variable rate, and an interest-only HELOC.
+    {
+      const prof = { status: "mfj", income: 220000, saltPaid: 18000, otherItemized: 4000 };
+      const inv = { totalReturn: 0.07, dividendYield: 0.015, qualifiedPct: 0.9, interestYield: 0.005, expenseRatio: 0.001, volatility: 0.15 };
+      const ls = [
+        loan({ type: "primary", balance: 400000, rate: 0.065, termMonths: 324, origination: "2023-05", pmi: 150, pmiEndBalance: 380000, assetValue: 500000, assetGrowth: 0.03 }),
+        loan({ type: "heloc", balance: 50000, rate: 0.08, termMonths: 240, ioMonths: 60, variable: true, newRate: 0.07, changeMonth: 24, tax: { helocUse: "improve" } }),
+        loan({ type: "auto", balance: 25000, rate: 0.07, termMonths: 60, origination: "2025-03", secured: true, tax: { newVehicle: true, usAssembly: true, personalUse: true } }),
+      ];
+      for (const opt of [{ freed: "invest", recast: false }, { freed: "snowball", recast: true }]) {
+        const inp = inputs({ profile: prof, inv, cash: 50000, extraMonthly: 300, horizonYears: 12, loans: ls, ...opt });
+        const r = S.simulate(inp);
+        const att = S.attribution(r);
+        const sum = att.parts.reduce((s, p) => s + p.value, 0);
+        check(`Attribution adds up (${opt.freed}, recast ${opt.recast})`, sum, att.total, 0.01);
+        // Identity for each strategy.
+        for (const k of ["payoff", "invest"]) {
+          const e = end(r, k);
+          const bal0 = ls.reduce((s, l) => s + l.balance, 0);
+          const idn = e.budget - bal0 - e.cumInterest - e.cumPmi - e.cumPenalty + e.grossReturn - e.fees - e.cumInvTax + e.cumDedBenefit - e.liqTax + e.property;
+          check(`Net worth identity (${k}, ${opt.freed})`, e.nwAfter, idn, 0.01);
+        }
+        // Heatmap cell at the current inputs equals the main result.
+        const z = S.heatmap(inp, 0, [0.065], [0.07]);
+        check(`Heatmap cell = summary difference (${opt.freed})`, z[0][0], att.total, 0.01);
+      }
+    }
+
+    // 13. SALT cap and mortgage insurance phaseout.
+    check("SALT cap 2026", S.saltCap(2026, 200000), 40400, 0.01);
+    check("SALT cap phase-down: MAGI $600k -> max(10k, 40,400 - 28,500)", S.saltCap(2026, 600000), 11900, 0.01);
+    check("SALT cap 2030 reverts to $10,000", S.saltCap(2030, 200000), 10000, 0);
+    {
+      const prof = { status: "mfj", income: 104500, saltPaid: 30000, otherItemized: 0 };
+      const it = S.emptyItems(); it.qriInterest = 10000; it.pmi = 1000;
+      const it0 = S.emptyItems(); it0.qriInterest = 10000;
+      // AGI $104,500 -> 5 steps of $1,000 (or part) over $100k -> 50% of $1,000 PMI = $500, at 12%.
+      check("Mortgage insurance phaseout at $104.5k AGI", S.federalTax(prof, it0, 2026).total - S.federalTax(prof, it, 2026).total, 500 * 0.12, 0.01);
+    }
+    // 14. Student loan phaseout: single MAGI $92,500 = halfway -> $1,250 of $2,500 deductible.
+    {
+      const prof = { status: "single", income: 92500, saltPaid: 0, otherItemized: 0 };
+      const it = S.emptyItems(); it.studentInterest = 3000;
+      check("Student loan deduction halfway through phaseout", S.federalTax(prof, it, 2026).student, 1250, 0.01);
+    }
+
+    // Render.
+    const out = document.getElementById("out");
+    out.innerHTML = results.map((r) =>
+      `<li class="${r.ok ? "pass" : "fail"}">${r.ok ? "PASS" : "FAIL"}: ${r.name}` +
+      ` <code>got ${typeof r.got === "number" ? r.got.toFixed(4) : r.got}</code>` +
+      (typeof r.want === "number" ? ` <code>expected ${r.want.toFixed(4)}</code>` : "") +
+      (r.note ? ` <span>(${r.note})</span>` : "") + "</li>").join("");
+    const passed = results.filter((r) => r.ok).length;
+    document.getElementById("summary").textContent = `${passed} / ${results.length} passed`;
+    document.title = `${passed}/${results.length} passed`;
+  })();
+  </script>
+</body>
+</html>
