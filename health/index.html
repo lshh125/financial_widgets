@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Health Plan Comparison 2026</title>
+  <link rel="stylesheet" href="../site.css" />
+  <link rel="stylesheet" href="../marriage/style.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">Financial Widgets</span>
+    <nav>
+      <a href="../">Home</a>
+      <a href="../marriage/">Marriage benefit/penalty</a>
+      <a href="./" aria-current="page">Health plans</a>
+    </nav>
+  </header>
+
+  <header>
+    <h1>Health Plan Comparison — 2026</h1>
+    <p class="sub">
+      Your yearly cost (premium + deductible + coinsurance) for up to three plans, across levels of medical
+      expense. <b>Solid lines</b> subtract the tax saved by paying premiums, FSA, and HSA contributions pre-tax.
+      <b>Dotted lines</b> are the same plans before tax savings.
+    </p>
+    <p class="sub">Not tax or insurance advice; accuracy is not guaranteed. See the <a href="../">disclaimer</a>.</p>
+  </header>
+
+  <main>
+    <aside id="controls">
+      <section id="settings">
+        <h2>Settings</h2>
+        <label class="row">Premium entered as
+          <select id="premiumMode">
+            <option value="monthly">Monthly</option>
+            <option value="annual">Annual total</option>
+          </select>
+        </label>
+        <label class="row">Coverage
+          <select id="coverage">
+            <option value="self">Self-only</option>
+            <option value="family">Family</option>
+          </select>
+        </label>
+        <div id="rangeFields"></div>
+        <button id="reset" type="button">Reset to defaults</button>
+      </section>
+      <div id="plans"></div>
+      <details class="panel" id="taxPanel" open>
+        <summary><h2>Tax savings (all plans)</h2></summary>
+        <div id="taxFields"></div>
+        <table class="brackets">
+          <thead>
+            <tr><th>Federal bracket<br><span class="muted">taxable income from (single / MFJ)</span></th><th>Income tax</th><th>+ FICA</th></tr>
+          </thead>
+          <tbody id="bracketRows"></tbody>
+        </table>
+        <p class="note">FICA adds 7.65% below the Social Security wage base ($184,500 per person) and 2.35%
+          (Medicare + Additional Medicare) above it, used here for 32% and up. A single filer in the 24% bracket
+          may already be over the wage base. Type a rate to include state or local tax.</p>
+        <h3>Non-HSA plans: FSA</h3>
+        <div id="fsaFields"></div>
+        <h3>HSA-eligible plans</h3>
+        <div id="hsaFields"></div>
+      </details>
+      <details class="panel notes" open>
+        <summary><h2>Assumptions</h2></summary>
+        <ul>
+          <li>Medical expense means allowed charges. You pay all of it up to the deductible, then the
+            coinsurance share, up to the out-of-pocket maximum. Copays are not modeled.</li>
+          <li>A plan counts as an HSA-eligible HDHP when its deductible is at least $1,700 (self-only) or
+            $3,400 (family). Other plans use a health FSA.</li>
+          <li>Premiums, FSA, and HSA contributions go through payroll pre-tax, so each dollar saves the tax
+            rate you pick.</li>
+          <li>FSA election is the chosen % of that plan's out-of-pocket cost at each expense level, capped at
+            $3,400. Any election above what you spend is forfeited (no carryover or grace period).</li>
+          <li>HSA money is yours even if unspent, so the full contribution counts. The employer HSA
+            contribution lowers the HDHP's cost and counts toward the $4,400 / $8,750 limit (+$1,000 at
+            55+).</li>
+        </ul>
+      </details>
+    </aside>
+
+    <section id="viz">
+      <div id="chartWrap">
+        <div id="chart"></div>
+        <p id="winners" class="winners"></p>
+      </div>
+      <div id="detail" class="detail"><p class="hint">Click the chart to see the breakdown at that expense.</p></div>
+    </section>
+  </main>
+
+  <div id="tapcard" class="tapcard" hidden>
+    <button id="tapcard-close" type="button" aria-label="Close">×</button>
+    <div class="body"></div>
+    <a href="#detail">Full breakdown ↓</a>
+  </div>
+
+  <script src="../marriage/tax.js"></script>
+  <script src="calc.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
