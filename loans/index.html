@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Loan Payoff vs. Invest 2026</title>
+  <title>Car Loan vs. Savings</title>
   <link rel="stylesheet" href="../site.css" />
   <link rel="stylesheet" href="../marriage/style.css" />
   <link rel="stylesheet" href="../health/style.css" />
@@ -17,111 +17,83 @@
       <a href="../">Home</a>
       <a href="../marriage/">Marriage benefit/penalty</a>
       <a href="../health/">Health plans</a>
-      <a href="./" aria-current="page">Pay off or invest</a>
+      <a href="./" aria-current="page">Car loan vs. savings</a>
     </nav>
   </header>
 
   <header>
-    <h1>Pay Off Loans or Invest? — 2026</h1>
+    <h1>Pay Off the Car Loan Early, or Keep the Cash in a Money Market?</h1>
     <p class="sub">
-      Compares using cash to pay down loans early with investing it in a taxable brokerage account while
-      keeping scheduled payments. Both strategies get the same monthly budget; anything a strategy does not
-      need for loan payments is invested. Taxes are computed for each strategy under 2026 U.S. federal law.
+      Compares paying extra on a car loan now with leaving that cash in a money market fund. Both choices
+      spend the same each month; once the loan is paid off early, its payment goes into the money market.
+      Money market interest is taxed as ordinary income plus NIIT (2026 federal rules).
     </p>
-    <p class="sub">Not tax, legal, or investment advice; accuracy is not guaranteed. See the <a href="../">disclaimer</a>.</p>
+    <p class="sub">Not tax or investment advice; accuracy is not guaranteed. See the <a href="../">disclaimer</a>.</p>
   </header>
 
   <main>
     <aside id="controls">
-      <section id="general">
-        <h2>Tax situation</h2>
-        <label class="row">Tax year <select disabled><option>2026</option></select></label>
-        <label class="row">Jurisdiction <select disabled><option>U.S. federal only</option></select></label>
-        <div id="generalFields"></div>
-        <button id="reset" type="button">Reset to defaults</button>
+      <section>
+        <h2>Car loan</h2>
+        <div id="loanFields"></div>
       </section>
-      <details class="panel" id="cashPanel" open>
-        <summary><h2>Cash and investments</h2></summary>
-        <div id="cashFields"></div>
-      </details>
-      <details class="panel" id="strategyPanel" open>
-        <summary><h2>Strategy rules</h2></summary>
-        <div id="strategyFields"></div>
-      </details>
-      <div id="loans"></div>
-      <button id="addLoan" type="button" class="add">+ Add loan</button>
-      <details class="panel" id="heatPanel">
-        <summary><h2>Heatmap axes</h2></summary>
-        <div id="heatFields"></div>
-      </details>
-      <details class="panel notes" id="notes">
-        <summary><h2>What is modeled</h2></summary>
+      <section>
+        <h2>Money market</h2>
+        <div id="mmFields"></div>
+        <p id="mmStatus" class="note"></p>
+        <button id="mmRefresh" type="button">Use latest Treasury bill rate</button>
+      </section>
+      <section>
+        <h2>Taxes</h2>
+        <div id="taxFields"></div>
+        <p id="taxSummary" class="note"></p>
+      </section>
+      <button id="reset" type="button">Reset to defaults</button>
+      <details class="panel notes">
+        <summary><h2>Assumptions</h2></summary>
         <ul>
-          <li><b>Cash flow:</b> each month both strategies have the same budget, equal to the scheduled loan
-            payments and mortgage insurance with no prepayment, plus extra savings. A payment that ends (by
-            payoff or prepayment) stays in the budget and is invested, or snowballed if you choose that.</li>
-          <li><b>Taxes:</b> each year, full 2026 federal income tax + NIIT is computed for each strategy and
-            compared with the same year without any loans or investments. This handles standard vs. itemized
-            deductions, phaseouts, the SALT cap, the $750k mortgage limit, and the 2/37 limit for the 37%
-            bracket. Tax changes are paid from, or added to, the brokerage account at year end.</li>
-          <li><b>Later years:</b> 2026 brackets and limits are held fixed (no inflation adjustment). Changes
-            already in law are applied: the car loan interest deduction ends after 2028 and the SALT cap
-            returns to $10,000 in 2030. Your other income stays the same each year.</li>
-          <li><b>Investments:</b> total return = price growth + dividends + interest. Dividends and interest
-            are taxed yearly and reinvested; tax payments are assumed to come from new shares with little
-            gain. Gains are taxed only when sold, all as long-term. Capital losses give no tax benefit here.</li>
-          <li><b>Loans:</b> monthly amortization with the contractual note rate. APR is shown for reference
-            only; fees on an existing loan are already paid. A prepayment keeps the payment and shortens the
-            loan unless you choose recast. Variable rates change once; HELOC re-draws are not modeled.</li>
-          <li><b>Not modeled:</b> state and local tax, Married Filing Separately and Head of Household,
-            income-driven repayment and forgiveness for student loans, passive-loss rules and depreciation for
-            rentals, §163(j) and self-employment tax for business loans, investment interest carryforward,
-            refinancing, and the value of having cash on hand.</li>
-          <li><b>Labels:</b> <span class="status verified">Verified rule</span> = modeled from 2026 IRS rules;
-            <span class="status simplified">Simplified</span> = a verified rule with parts left out;
-            <span class="status assumption">Your assumption</span> = your input, not a legal conclusion.</li>
+          <li>Federal tax only, 2026 brackets with the standard deduction. Your tax rate is the bracket for
+            your income; money market interest is taxed at that rate, plus 3.8% NIIT if your income is over
+            $200k (single) or $250k (joint).</li>
+          <li>The APR is used as the loan's interest rate. Extra payments keep the monthly payment the same, so
+            the loan ends sooner. No prepayment penalty.</li>
+          <li>Money market interest compounds monthly and its tax is paid as it is earned. The rate stays the
+            same; real money market yields move with short-term interest rates.</li>
+          <li>Car loan interest deduction (2025–2028 only): up to $10,000 a year for a new, U.S.-assembled,
+            personal-use vehicle bought with a loan taken out after 2024. It shrinks by $200 per $1,000 of
+            income over $100k (single) or $200k (joint). It does not reduce NIIT.</li>
+          <li>The comparison runs to the loan's original end date. State tax is not included (Treasury money
+            market funds are often exempt from state tax, which would favor keeping the cash a little).</li>
         </ul>
       </details>
     </aside>
 
     <section id="viz">
-      <div id="summary" class="card"></div>
       <div class="card">
-        <div class="cardhead">
-          <h2>Net worth over time</h2>
-          <label class="row">Show
-            <select id="view">
-              <option value="after">After tax if sold</option>
-              <option value="pre">Before selling</option>
-            </select>
-          </label>
-        </div>
-        <div id="chartA" class="chart"></div>
+        <h2>1. Should you pay extra?</h2>
+        <p id="verdict" class="headline"></p>
+        <div id="chartBars" class="chart"></div>
+        <h3>Decision map</h3>
+        <p class="sub small" id="mapNote"></p>
+        <div id="chartMap" class="chart"></div>
       </div>
       <div class="card">
-        <h2>Where the difference comes from</h2>
-        <p class="sub small">Invest minus Pay Off at the horizon, after tax if sold. The parts add up to the total.
-          The two tax parts are split in a fixed order (deductions first, then investment income), so how they
-          divide depends on that order; their sum does not.</p>
-        <div id="chartC" class="chart"></div>
+        <h2>2. How much to pay extra?</h2>
+        <p class="sub small">Extra net worth at the loan's original end date (after tax), for each amount paid
+          extra today. The dot is the amount you entered.</p>
+        <div id="chartAmount" class="chart"></div>
       </div>
       <div class="card">
-        <h2>Break-even heatmap</h2>
-        <p class="sub small" id="heatNote"></p>
-        <div id="chartB" class="chart"></div>
-      </div>
-      <div class="card">
-        <h2>Loan comparison</h2>
-        <p class="sub small">The note rate is what the lender charges. The after-tax rate is an estimate: the note
-          rate reduced by the actual year-1 tax change from that loan's interest, with no prepayment. Click a
-          heading to sort.</p>
-        <div class="tablewrap"><table id="loanTable" class="data"></table></div>
-      </div>
-      <div class="card">
-        <h2>Risk: uncertain returns</h2>
-        <p class="sub small" id="riskNote"></p>
-        <div id="chartE" class="chart"></div>
-        <div class="tablewrap"><table id="riskTable" class="data"></table></div>
+        <h2>3. What do you gain?</h2>
+        <p class="sub small">Interest saved is not the same as money gained: cash used to pay the loan stops
+          earning in the money market. The bars break the gain down.</p>
+        <div id="kpis" class="kpis three"></div>
+        <div id="chartWaterfall" class="chart"></div>
+        <h3>Gain over time</h3>
+        <p class="sub small">Net worth with the extra payment minus net worth without it, month by month. The
+          line bends when the loan is paid off: from then on both choices are adding money to the money market.
+          With the car loan deduction, it also bends when the deduction ends after 2028.</p>
+        <div id="chartTime" class="chart"></div>
       </div>
     </section>
   </main>
@@ -132,12 +104,8 @@
   </div>
 
   <script src="../marriage/tax.js"></script>
-  <script src="tax2026.js"></script>
-  <script src="loan.js"></script>
-  <script src="invest.js"></script>
-  <script src="sim.js"></script>
+  <script src="calc.js"></script>
   <script src="ui.js"></script>
-  <script src="charts.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

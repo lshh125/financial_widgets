@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Car Loan Tests</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; color: #1d2330; background: #fff; }
+    .pass { color: #23711e; } .fail { color: #b2182b; font-weight: 700; }
+    code { background: #f2f4f7; padding: 1px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Car loan vs. money market: tests</h1>
+  <p id="summary"></p>
+  <ol id="out"></ol>
+  <script src="../marriage/tax.js"></script>
+  <script src="calc.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    const C = window.CarCalc;
+    const results = [];
+    const check = (name, got, want, tol) =>
+      results.push({ name, got, want, ok: typeof want === "boolean" ? got === want : Math.abs(got - want) <= tol });
+    const base = { balance: 25000, apr: 0.07, months: 60, mmRate: 0.04, status: "single", magi: 90000, carDeduction: false, startYear: 2026, startMonth: 9 };
+
+    // $25,000 at 7% over 60 months: $495.03/month (standard amortization).
+    check("Payment: $25k, 7%, 60 months", C.amortPayment(25000, 0.07, 60), 495.03, 0.005);
+
+    // No prepayment: no difference.
+    check("Prepay $0: no gain", C.simulate(base, 0).net, 0, 1e-9);
+
+    // 0% money market: the gain is exactly the interest saved.
+    {
+      const r = C.simulate({ ...base, mmRate: 0 }, 10000);
+      check("0% money market: gain = interest saved", r.net, r.parts.interestSaved, 1e-6);
+      check("0% money market: nothing given up", r.parts.mmGivenUp, 0, 1e-9);
+    }
+
+    // After-tax money market rate equal to the loan rate: no difference.
+    // Single, $50k MAGI -> 12% bracket, no NIIT. Money market 7% / 0.88 after tax = 7%.
+    {
+      const p = { ...base, magi: 50000, mmRate: 0.07 / 0.88 };
+      check("12% bracket at $50k single", C.taxRates("single", 50000).mm, 0.12, 1e-12);
+      check("Equal after-tax rates: no gain", C.simulate(p, 10000).net, 0, 0.01);
+    }
+
+    // Parts add up to the net gain, with NIIT and the car deduction on.
+    {
+      const p = { ...base, status: "mfj", magi: 260000, carDeduction: true, startMonth: 0 };
+      const r = C.simulate(p, 15000);
+      const sum = r.parts.interestSaved + r.parts.mmGivenUp + r.parts.deductionGivenUp;
+      check("Waterfall parts add up to the net gain", sum, r.net, 1e-6);
+      check("NIIT applies above $250k MFJ: 24% + 3.8%", C.taxRates("mfj", 260000).mm, 0.278, 1e-12);
+    }
+
+    // Car deduction: counted for 2028, not for 2029 and later.
+    {
+      const p = { ...base, carDeduction: true, startYear: 2028, startMonth: 0, months: 24 };
+      const r = C.simulate(p, 0);
+      check("Car deduction counted in 2028", r.keep.deduction > 0, true);
+      check("No car deduction from 2029", C.simulate({ ...p, startYear: 2029 }, 0).keep.deduction, 0, 0);
+      // 2028 only: 22% bracket at $90k single times the 2028 interest.
+      let bal = p.balance, i2028 = 0;
+      const pay = C.amortPayment(p.balance, p.apr, p.months);
+      for (let m = 0; m < 12; m++) { const i = bal * p.apr / 12; i2028 += i; bal -= pay - i; }
+      check("2028 deduction value = 22% of 2028 interest", r.keep.deduction, 0.22 * i2028, 1e-6);
+    }
+
+    // Phaseout: single $140k -> $8,000 reduction wipes out about $1,500 of interest.
+    check("Phaseout reduction at $140k single", C.carPhaseReduction("single", 140000), 8000, 0);
+    check("Phased out: no deduction value", C.simulate({ ...base, magi: 140000, carDeduction: true }, 0).keep.deduction, 0, 0);
+
+    // Paying off everything now: done 60 months early and all interest saved.
+    {
+      const r = C.simulate(base, 25000);
+      check("Full prepay: 60 months early", r.monthsEarlier, 60, 0);
+      check("Full prepay: saves all scheduled interest", r.parts.interestSaved, 495.0308 * 60 - 25000, 0.5);
+    }
+
+    // Prepaying beats investing when the loan rate is above the after-tax money market rate.
+    check("7% loan vs 4% money market: paying extra wins", C.simulate(base, 10000).net > 0, true);
+    check("3% loan vs 5% money market at 12%: investing wins", C.simulate({ ...base, apr: 0.03, mmRate: 0.05, magi: 50000 }, 10000).net < 0, true);
+
+    document.getElementById("out").innerHTML = results.map((r) =>
+      `<li class="${r.ok ? "pass" : "fail"}">${r.ok ? "PASS" : "FAIL"}: ${r.name} <code>got ${typeof r.got === "number" ? r.got.toFixed(4) : r.got}</code>` +
+      (typeof r.want === "number" ? ` <code>expected ${r.want.toFixed(4)}</code>` : "") + "</li>").join("");
+    const passed = results.filter((r) => r.ok).length;
+    document.getElementById("summary").textContent = `${passed} / ${results.length} passed`;
+  })();
+  </script>
+</body>
+</html>

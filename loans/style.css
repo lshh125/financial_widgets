@@ -1,60 +1,26 @@
-/* Loan payoff vs. invest page. Shares layout and controls with ../marriage and ../health styles. */
+/* Car loan vs. savings page. Shares layout and controls with ../marriage and ../health styles. */
 
 #viz { grid-template-columns: minmax(0, 1fr); }
 .card { padding: 12px 16px; min-width: 0; }
 .card h2 { margin: 2px 0 6px; }
-.cardhead { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.cardhead .row { margin: 0; gap: 6px; }
+.card h3 { margin-top: 16px; }
 .sub.small { font-size: 12.5px; margin-bottom: 6px; }
-.chart { min-height: 200px; }
+.headline { font-size: 16px; margin: 4px 0 6px; line-height: 1.4; }
+.chart { min-height: 120px; }
+#mmRefresh { margin-top: 6px; }
+aside > button#reset { margin: 10px 0; }
 
-/* Rule-status labels */
-.status { font-size: 11px; padding: 1px 7px; border-radius: 10px; white-space: nowrap; font-weight: 600; }
-.status:empty { display: none; }
-.status.verified { background: #e3f1e1; color: #23711e; }
-.status.simplified { background: #fff1d6; color: #8a5a00; }
-.status.assumption { background: #f6e3e6; color: #9b1c2e; }
-.loan summary .status { margin-left: 4px; }
-
-.loan .row span { flex: none; }
-.loan input.name, .loan input[type=month] {
-  font: inherit; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; min-width: 0;
-}
-.loan input.name { width: 60%; }
-.taxnote { font-size: 12.5px; line-height: 1.45; margin: 8px 0 4px; padding: 6px 8px; background: #f6f7f9; border-radius: 6px; }
-.remove { color: var(--neg); font-size: 12.5px; }
-button.add { width: 100%; margin: 8px 0; padding: 8px; font-weight: 600; }
-button:disabled { opacity: .5; cursor: default; }
-
-/* Summary */
-#summary .headline { font-size: 16px; margin: 0 0 10px; line-height: 1.4; }
-.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+.kpis { display: grid; gap: 10px; margin: 6px 0 8px; }
+.kpis.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .kpis > div { border: 1px solid var(--border); border-top: 4px solid var(--c); border-radius: 8px; padding: 8px 10px; }
 .kpis span { display: block; font-size: 12.5px; color: var(--muted); }
 .kpis b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
 .kpis small { color: var(--muted); font-size: 12px; }
-#summary ul { margin: 4px 0 8px; padding-left: 20px; }
-#summary p { margin: 6px 0; }
-.prob { background: #eef4fb; border-radius: 6px; padding: 6px 10px; }
-.cautions summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-.cautions li { font-size: 12.5px; color: var(--muted); }
-
-/* Tables */
-.tablewrap { overflow-x: auto; }
-table.data { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
-table.data th, table.data td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: top; }
-table.data td:not(:first-child) { white-space: nowrap; }
-table.data th:first-child, table.data td:first-child { text-align: left; }
-table.data th { font-weight: 600; font-size: 12px; color: var(--muted); }
-#loanTable th { cursor: pointer; user-select: none; }
-#loanTable th.asc::after { content: " ▲"; }
-#loanTable th.desc::after { content: " ▼"; }
-#riskTable { margin-top: 8px; }
 
 @media (max-width: 700px) {
-  .card { padding: 10px 10px; }
-  .kpis b { font-size: 17px; }
-  table.data { font-size: 12px; }
-  table.data th, table.data td { padding: 4px 5px; }
-  .loan input.name, .loan input[type=month] { font-size: 16px; }
+  .card { padding: 10px; }
+  .kpis { gap: 6px; }
+  .kpis > div { padding: 6px 8px; }
+  .kpis b { font-size: 16px; }
+  .kpis small { font-size: 11px; }
 }
