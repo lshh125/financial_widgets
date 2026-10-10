@@ -45,6 +45,12 @@
             <option value="family">Family</option>
           </select>
         </label>
+        <p id="coverageWarn" class="warn" hidden>
+          Family plans: this chart treats the deductible and out-of-pocket max as one pool for the whole family
+          (non-embedded). Many plans use embedded limits instead, where each person also has their own smaller
+          deductible and max. Then one person with high costs gets coverage sooner, and your cost can be lower
+          than shown. Check your plan documents.
+        </p>
         <div id="rangeFields"></div>
         <button id="reset" type="button">Reset to defaults</button>
       </section>
@@ -63,6 +69,10 @@
           may already be over the wage base. Type a rate to include state or local tax.</p>
         <h3>Non-HSA plans: FSA</h3>
         <div id="fsaFields"></div>
+        <p id="fsaWarn" class="warn" hidden>
+          Over 100%: you elect more than you spend, and the unused FSA money is forfeited. The chart counts that
+          loss, so above 100% only makes sense if you expect higher costs than the chart's expense level.
+        </p>
         <h3>HSA-eligible plans</h3>
         <div id="hsaFields"></div>
       </details>
@@ -88,6 +98,13 @@
       <div id="chartWrap">
         <div id="chart"></div>
         <p id="winners" class="winners"></p>
+        <p class="callout">
+          <b>Regular prescriptions?</b> This chart puts all costs through one deductible and one out-of-pocket max.
+          That matches HDHPs, where drugs count toward the same deductible and max. Non-HDHP plans often charge
+          copays for drugs and may have a separate pharmacy out-of-pocket max, so drug costs may not be capped by
+          the max shown here, or may be cheaper before the deductible. If you need medication long-term, add each
+          plan's drug costs yourself; this chart may not reflect them well.
+        </p>
       </div>
       <div id="detail" class="detail"><p class="hint">Click the chart to see the breakdown at that expense.</p></div>
     </section>

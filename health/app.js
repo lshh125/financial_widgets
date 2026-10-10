@@ -232,6 +232,8 @@
     for (const f of fields) f.sync(except);
     document.getElementById("premiumMode").value = state.premiumMode;
     document.getElementById("coverage").value = state.coverage;
+    document.getElementById("coverageWarn").hidden = state.coverage !== "family";
+    document.getElementById("fsaWarn").hidden = state.fsaPct <= 100;
     document.querySelectorAll("#bracketRows button").forEach((b) =>
       b.classList.toggle("active", Math.abs(Number(b.dataset.rate) - state.taxRate) < 1e-9)
     );

@@ -34,6 +34,19 @@
 .brackets button { margin: 0; width: 100%; min-width: 64px; padding: 4px 6px; font-variant-numeric: tabular-nums; }
 .brackets button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+.warn { margin: 4px 0 6px; line-height: 1.4; }
+.warn[hidden] { display: none; }
+.callout {
+  margin: 8px;
+  padding: 8px 12px;
+  background: #fff8e6;
+  border: 1px solid #f0d58a;
+  border-left: 4px solid #d99a00;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 #chartWrap { padding: 4px 8px 8px; }
 .winners { margin: 4px 8px 4px; font-size: 13px; line-height: 1.8; }
 .winners .seg { white-space: nowrap; margin-right: 10px; }
