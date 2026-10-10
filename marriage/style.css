@@ -56,6 +56,16 @@ h3 { font-size: 12px; margin: 10px 0 4px; color: var(--muted); text-transform: u
 .slider { margin: 6px 0; }
 .slider .lbl { display: flex; justify-content: space-between; font-size: 13px; }
 .slider .lbl output { font-variant-numeric: tabular-nums; font-weight: 600; }
+/* Small age picker inside a slider's label row (catch-up limits); sized to keep the row height. */
+.slider .lbl select.age {
+  font-size: 11.5px;
+  line-height: 1.2;
+  padding: 0 2px;
+  margin-left: 6px;
+  border-radius: 4px;
+  color: var(--muted);
+  vertical-align: baseline;
+}
 .slider input[type=range] { width: 100%; accent-color: var(--accent); }
 
 .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0; }
@@ -155,6 +165,6 @@ button:hover { background: #eef2f8; }
   .detail table { font-size: 12.5px; }
   .detail th, .detail td { padding: 4px 6px; }
   /* 16px inputs stop iOS from zooming in on focus; taller sliders are easier to grab. */
-  select { font-size: 16px; }
+  select, .slider .lbl select.age { font-size: 16px; }
   .slider input[type=range] { height: 28px; }
 }

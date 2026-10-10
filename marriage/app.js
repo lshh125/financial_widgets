@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  const { compare } = window.TaxCalc;
+  const { compare, TAX_2026 } = window.TaxCalc;
+  const LIM = TAX_2026.limits;
   const MAX_CELLS_PER_AXIS = 150;
 
   const money = (v) => "$" + Math.round(v).toLocaleString("en-US");
@@ -19,8 +20,15 @@
     {
       title: "Pre-tax contributions",
       sliders: [
-        { key: "k401", label: "401(k)", min: 0, max: 35750, step: 250, def: 0, fmt: money },
-        { key: "hsa", label: "HSA (payroll, self-only)", min: 0, max: 5400, step: 50, def: 0, fmt: money },
+        {
+          key: "k401", label: "401(k)", min: 0, step: 250, def: 0, fmt: money,
+          // Age-based catch-up: the slider maximum follows the age chosen next to the label.
+          age: { key: "k401Age", options: [["none", "Under 50", LIM.k401], ["50", "Age 50+", LIM.k401 + LIM.k401CatchUp50], ["60", "Age 60–63", LIM.k401 + LIM.k401CatchUp60to63]] },
+        },
+        {
+          key: "hsa", label: "HSA (payroll, self-only)", min: 0, step: 50, def: 0, fmt: money,
+          age: { key: "hsaAge", options: [["none", "Under 55", LIM.hsaSelf], ["55", "Age 55+", LIM.hsaSelf + LIM.hsaCatchUp55]] },
+        },
       ],
     },
     {
@@ -50,8 +58,17 @@
   function defaults() {
     for (const p of PEOPLE) {
       state[p.id] = {};
-      for (const s of ALL_SLIDERS) state[p.id][s.key] = s.def;
+      for (const s of ALL_SLIDERS) {
+        state[p.id][s.key] = s.def;
+        if (s.age) state[p.id][s.age.key] = "none";
+      }
     }
+  }
+
+  // Slider maximum: fixed, or the contribution limit for the age chosen.
+  function sliderMax(s, st) {
+    if (!s.age) return s.max;
+    return s.age.options.find(([v]) => v === st[s.age.key])[2];
   }
 
   // ---------- Controls ----------
@@ -79,11 +96,25 @@
         for (const s of g.sliders) {
           const wrap = document.createElement("div");
           wrap.className = "slider";
+          const age = s.age
+            ? ` <select class="age" id="${p.id}-${s.age.key}" title="Age-based catch-up limit" aria-label="${s.label} age">` +
+              s.age.options.map(([v, t]) => `<option value="${v}">${t}</option>`).join("") + `</select>`
+            : "";
           wrap.innerHTML =
-            `<div class="lbl"><span>${s.label}</span><output id="${p.id}-${s.key}-out"></output></div>` +
-            `<input type="range" id="${p.id}-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}">`;
+            `<div class="lbl"><span>${s.label}${age}</span><output id="${p.id}-${s.key}-out"></output></div>` +
+            `<input type="range" id="${p.id}-${s.key}" min="${s.min}" max="${sliderMax(s, state[p.id])}" step="${s.step}">`;
           const input = wrap.querySelector("input");
           input.addEventListener("input", () => onSlider(p.id, s.key, Number(input.value)));
+          if (s.age) {
+            const sel = wrap.querySelector("select.age");
+            sel.addEventListener("change", () => {
+              const st = state[p.id];
+              st[s.age.key] = sel.value;
+              st[s.key] = Math.min(st[s.key], sliderMax(s, st));
+              syncControls();
+              scheduleRender();
+            });
+          }
           sec.appendChild(wrap);
         }
       }
@@ -100,7 +131,12 @@
     for (const p of PEOPLE) {
       for (const s of ALL_SLIDERS) {
         const v = state[p.id][s.key];
-        document.getElementById(`${p.id}-${s.key}`).value = v;
+        const input = document.getElementById(`${p.id}-${s.key}`);
+        if (s.age) {
+          document.getElementById(`${p.id}-${s.age.key}`).value = state[p.id][s.age.key];
+          input.max = sliderMax(s, state[p.id]);
+        }
+        input.value = v;
         document.getElementById(`${p.id}-${s.key}-out`).textContent = s.fmt(v);
       }
       const st = state[p.id];
