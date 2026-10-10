@@ -79,6 +79,23 @@
       check("Full prepay: saves all scheduled interest", r.parts.interestSaved, 495.0308 * 60 - 25000, 0.5);
     }
 
+    // Monthly extra: $12,000 at 0% over 12 months ($1,000/mo) + $1,000/mo extra -> paid off after
+    // month 6, 6 months early; with a 0% money market nothing is gained or lost.
+    {
+      const p = { ...base, balance: 12000, apr: 0, months: 12, mmRate: 0 };
+      const r = C.simulate(p, 0, 1000);
+      check("Monthly extra: paid off 6 months early", r.monthsEarlier, 6, 0);
+      check("Monthly extra, 0% loan and 0% money market: no gain", r.net, 0, 1e-9);
+    }
+    {
+      const r = C.simulate({ ...base, mmRate: 0 }, 0, 200);
+      check("Monthly extra, 0% money market: gain = interest saved", r.net, r.parts.interestSaved, 1e-6);
+      const q = C.simulate({ ...base, status: "mfj", magi: 260000, carDeduction: true, startMonth: 0 }, 0, 300);
+      check("Monthly extra: waterfall parts add up", q.parts.interestSaved + q.parts.mmGivenUp + q.parts.deductionGivenUp, q.net, 1e-6);
+      check("Monthly extra at equal after-tax rates: no gain",
+        C.simulate({ ...base, magi: 50000, mmRate: 0.07 / 0.88 }, 0, 300).net, 0, 0.01);
+    }
+
     // Prepaying beats investing when the loan rate is above the after-tax money market rate.
     check("7% loan vs 4% money market: paying extra wins", C.simulate(base, 10000).net > 0, true);
     check("3% loan vs 5% money market at 12%: investing wins", C.simulate({ ...base, apr: 0.03, mmRate: 0.05, magi: 50000 }, 10000).net < 0, true);

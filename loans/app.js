@@ -13,7 +13,7 @@
   const START = { year: now.getFullYear(), month: now.getMonth() };
 
   const defaults = () => ({
-    balance: 25000, apr: 7, months: 60, prepay: 10000, carDeduction: false,
+    balance: 25000, apr: 7, months: 60, extraType: "lump", prepay: 10000, monthlyExtra: 200, carDeduction: false,
     mmRate: tbill ? tbill.rate : 4, status: "single", magi: 120000,
   });
   let tbill = null; // { rate, date } from the latest auction
@@ -26,6 +26,14 @@
     mmRate: state.mmRate / 100, status: state.status, magi: state.magi, carDeduction: state.carDeduction,
     startYear: START.year, startMonth: START.month,
   });
+  // The extra payment is either one-time now or the same amount every month.
+  const extraAmount = () => (state.extraType === "monthly" ? state.monthlyExtra : state.prepay);
+  const run = (p, amount) => (state.extraType === "monthly" ? K.simulate(p, 0, amount) : K.simulate(p, amount, 0));
+  // Right end of the "how much" chart: the whole balance, or for monthly, twice the scheduled
+  // payment (or more, to include the amount entered).
+  const amountMax = (p) => state.extraType === "monthly"
+    ? Math.ceil(Math.max(2 * K.amortPayment(p.balance, p.apr, p.months), 1.25 * state.monthlyExtra, 100) / 50) * 50
+    : p.balance;
   const pct = (v) => (v * 100).toFixed(2) + "%";
   const monthLabel = (m) => U.monthLabel(START.month + m - 1, START.year);
 
@@ -49,13 +57,22 @@
     add("loanFields", U.field(num("Months left", " mo", 1, 96, 1, "months", () =>
       `Payment ${U.money(K.amortPayment(state.balance, state.apr / 100, Math.max(1, Math.round(state.months))))}/mo; ends ${monthLabel(Math.round(state.months))}.`,
       (v) => (state.months = Math.max(1, Math.round(v)))), onChange));
-    const pre = U.field({
-      ...num("Extra payment now", "$", 0, 100000, 100, "prepay", () => `Up to the full balance (${U.money(state.balance)}).`,
-        (v) => (state.prepay = Math.min(v, state.balance))),
-    }, onChange);
-    add("loanFields", pre);
-    // Keep the extra-payment slider's range equal to the balance.
-    ctls.push({ sync: () => (pre.el.querySelector("input[type=range]").max = state.balance) });
+    add("loanFields", U.select({
+      label: "Extra payment",
+      options: [["lump", "One-time, now"], ["monthly", "Every month"]],
+      get: () => state.extraType,
+      set: (v) => { state.extraType = v; build(); },
+    }, onChange));
+    if (state.extraType === "lump") {
+      const pre = U.field(num("Extra payment now", "$", 0, 100000, 100, "prepay", () => `Up to the full balance (${U.money(state.balance)}).`,
+        (v) => (state.prepay = Math.min(v, state.balance))), onChange);
+      add("loanFields", pre);
+      // Keep the extra-payment slider's range equal to the balance.
+      ctls.push({ sync: () => (pre.el.querySelector("input[type=range]").max = state.balance) });
+    } else {
+      add("loanFields", U.field(num("Extra each month", "$", 0, 3000, 25, "monthlyExtra", () =>
+        `On top of the ${U.money(K.amortPayment(state.balance, state.apr / 100, Math.max(1, Math.round(state.months))))}/mo payment, until the loan is paid off.`), onChange));
+    }
     add("loanFields", U.check({ label: "Qualifies for the car loan interest deduction", get: () => state.carDeduction, set: (v) => (state.carDeduction = v) }, onChange));
 
     add("mmFields", U.field(num("Money market yield", "%", 0, 8, 0.01, "mmRate", null, (v) => { state.mmRate = v; mmEdited = true; }), onChange));
@@ -102,11 +119,18 @@
     font: { size: narrow() ? 11 : 12 },
     hoverlabel: { align: "left", bgcolor: "#fff", font: { size: 12.5, color: "#1d2330" } },
   });
-  const config = { displayModeBar: false, scrollZoom: false, responsive: true, staticPlot: TOUCH };
+  const config = { displayModeBar: false, scrollZoom: false, staticPlot: TOUCH };
+  // Draw with an explicit width and height. Plotly's own responsive resizing drops a height given
+  // without a width and re-measures the container, which can collapse a chart; resizes are handled
+  // in init() instead.
+  function draw(id, traces, layout) {
+    const el = document.getElementById(id);
+    Plotly.react(el, traces, { ...layout, width: Math.max(260, Math.floor(el.clientWidth)) }, config);
+  }
 
   function render() {
     const p = params();
-    const r = K.simulate(p, state.prepay);
+    const r = run(p, extraAmount());
     const t = r.rates;
     const carAfter = K.carAfterTaxRate(p);
     const mmAfter = p.mmRate * (1 - t.mm);
@@ -154,12 +178,12 @@
       hovertemplate: "%{y}: %{text}<extra></extra>",
     };
     const max = Math.max(...rows.map((r) => r.v)) * 100;
-    Plotly.react("chartBars", [trace], {
+    draw("chartBars", [trace], {
       ...baseLayout(40 * rows.length + 60, narrow() ? { l: 8, r: 50, t: 6, b: 34 } : { l: 8, r: 60, t: 6, b: 36 }),
       xaxis: { ticksuffix: "%", range: [0, max * 1.15 || 1], fixedrange: true },
       yaxis: { automargin: true, fixedrange: true },
       showlegend: false,
-    }, config);
+    });
   }
 
   // Share of interest the car deduction covers this year (0 if not eligible or phased out).
@@ -212,7 +236,7 @@
       },
       annotations,
     };
-    Plotly.react("chartMap", traces, layout, config);
+    draw("chartMap", traces, layout);
     const be = breakEven(t.ord * 100) / 100;
     const gap = (p.apr - be) * 100;
     document.getElementById("mapNote").textContent =
@@ -224,27 +248,32 @@
 
   // Chart 2: gain at the original end date by amount paid extra.
   function renderAmount(p) {
-    const n = 50;
-    const xs = Array.from({ length: n + 1 }, (_, i) => (p.balance * i) / n);
-    const ys = xs.map((x) => K.simulate(p, x).net);
-    const cur = K.simulate(p, state.prepay).net;
+    const monthly = state.extraType === "monthly";
+    const n = 50, max = amountMax(p);
+    const xs = Array.from({ length: n + 1 }, (_, i) => (max * i) / n);
+    const ys = xs.map((x) => run(p, x).net);
+    const cur = run(p, extraAmount()).net;
+    const per = monthly ? " each month" : "";
+    document.getElementById("amountNote").textContent =
+      `Extra net worth at the loan's original end date (after tax), for each amount paid extra ${monthly ? "every month" : "today"}. ` +
+      "The dot is the amount you entered.";
     const traces = [
       {
         type: "scatter", mode: "lines", x: xs, y: ys, line: { color: COL.pay, width: 3 },
-        hovertemplate: "Pay %{x:$,.0f} extra → %{y:$,.0f}<extra></extra>",
+        hovertemplate: `Pay %{x:$,.0f} extra${per} → %{y:$,.0f}<extra></extra>`,
       },
       {
-        type: "scatter", mode: "markers", x: [state.prepay], y: [cur],
+        type: "scatter", mode: "markers", x: [extraAmount()], y: [cur],
         marker: { size: 12, color: "#1d2330", line: { color: "#fff", width: 2 } },
         hovertemplate: "Your amount: %{x:$,.0f} → %{y:$,.0f}<extra></extra>",
       },
     ];
-    Plotly.react("chartAmount", traces, {
+    draw("chartAmount", traces, {
       ...baseLayout(narrow() ? 300 : 340, narrow() ? { l: 56, r: 12, t: 10, b: 44 } : { l: 70, r: 20, t: 10, b: 50 }),
       showlegend: false,
-      xaxis: { title: { text: "Extra payment now" }, tickprefix: "$", tickformat: "~s", fixedrange: true },
+      xaxis: { title: { text: monthly ? "Extra payment each month" : "Extra payment now" }, tickprefix: "$", tickformat: "~s", fixedrange: true },
       yaxis: { title: { text: `Gain by ${monthLabel(p.months)}` }, tickprefix: "$", tickformat: "~s", fixedrange: true, zeroline: true, zerolinecolor: "#9aa3b2" },
-    }, config);
+    });
   }
 
   // Chart 3: waterfall, number cards, and gain over time.
@@ -260,7 +289,7 @@
       <div style="--c:${COL.payLight}"><span>Interest saved</span><b>${U.money(r.parts.interestSaved)}</b><small>car loan interest not paid</small></div>
       <div style="--c:#9aa3b2"><span>Paid off early</span><b>${r.monthsEarlier} mo</b><small>${r.pay.payoff === 0 ? "paid off now" : r.monthsEarlier > 0 ? `done ${monthLabel(r.pay.payoff)}` : "no change"}</small></div>`;
 
-    Plotly.react("chartWaterfall", [{
+    draw("chartWaterfall", [{
       type: "waterfall",
       x: [...parts.map((d) => d[0]), "<b>Net gain</b>"],
       y: [...parts.map((d) => d[1]), r.net],
@@ -277,7 +306,7 @@
       showlegend: false,
       xaxis: { fixedrange: true, tickangle: 0, tickfont: { size: narrow() ? 10 : 12 } },
       yaxis: { tickprefix: "$", tickformat: "~s", fixedrange: true, zeroline: true, zerolinecolor: "#9aa3b2" },
-    }, config);
+    });
 
     const months = r.gain.map((_, i) => i);
     const shapes = r.pay.payoff !== null && r.pay.payoff > 0 && r.pay.payoff < p.months
@@ -286,7 +315,7 @@
     const annotations = shapes.length
       ? [{ x: r.pay.payoff, y: 1, yref: "paper", text: `Paid off ${monthLabel(r.pay.payoff)}`, showarrow: false, xanchor: "left", yanchor: "top", xshift: 4, font: { size: 11 } }]
       : [];
-    Plotly.react("chartTime", [{
+    draw("chartTime", [{
       type: "scatter", mode: "lines", x: months, y: r.gain, line: { color: COL.pay, width: 3 },
       customdata: months.map((m) => (m === 0 ? "Now" : monthLabel(m))),
       hovertemplate: "%{customdata}: %{y:$,.0f}<extra></extra>",
@@ -295,7 +324,7 @@
       showlegend: false, shapes, annotations,
       xaxis: { title: { text: "Months from now" }, fixedrange: true },
       yaxis: { title: { text: "Cumulative net gain" }, tickprefix: "$", tickformat: "~s", fixedrange: true, zeroline: true, zerolinecolor: "#9aa3b2" },
-    }, config);
+    });
   }
 
   // ---------- Touch: tap a chart for its numbers ----------
@@ -325,8 +354,8 @@
         (car > mm ? `<b style="color:${COL.pay}">Pay extra</b>` : `<b style="color:${COL.mm}">Keep the cash</b>`);
     });
     on("chartAmount", (pt) => {
-      const x = Math.max(0, Math.min(last.p.balance, pt.x));
-      return `Pay <b>${U.money(x)}</b> extra → gain <b>${U.money(K.simulate(last.p, x).net)}</b> by ${monthLabel(last.p.months)}`;
+      const x = Math.max(0, Math.min(amountMax(last.p), pt.x));
+      return `Pay <b>${U.money(x)}</b> extra${state.extraType === "monthly" ? " each month" : " now"} → gain <b>${U.money(run(last.p, x).net)}</b> by ${monthLabel(last.p.months)}`;
     });
     on("chartTime", (pt) => {
       const m = Math.max(0, Math.min(last.p.months, Math.round(pt.x)));
@@ -346,10 +375,13 @@
       scheduleRender();
     });
     document.getElementById("mmRefresh").addEventListener("click", () => loadTbill(true));
-    let lastW = window.innerWidth;
-    window.addEventListener("resize", () => {
-      if (window.innerWidth !== lastW) { lastW = window.innerWidth; scheduleRender(); }
-    });
+    // Redraw when the chart column changes width (window resize or layout change). Height-only
+    // changes are ignored, since mobile browsers resize the window when the address bar hides.
+    const viz = document.getElementById("viz");
+    let lastW = viz.clientWidth;
+    new ResizeObserver(() => {
+      if (viz.clientWidth !== lastW) { lastW = viz.clientWidth; scheduleRender(); }
+    }).observe(viz);
     if (TOUCH) wireTaps();
     render();
     // Fill in the latest rate unless the user has already typed one.

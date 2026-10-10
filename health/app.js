@@ -299,7 +299,11 @@
       type: "line", xref: "x", yref: "paper", x0: selected, x1: selected, y0: 0, y1: 1,
       line: { color: "#1d2330", width: 1.5, dash: "dash" },
     }];
+    const chartEl = document.getElementById("chart");
+    // Explicit width and height: Plotly's own responsive resizing drops a height given without a
+    // width and re-measures the container, which can collapse the chart. Resizes are handled in init().
     const layout = {
+      width: Math.max(280, Math.floor(chartEl.clientWidth)),
       height,
       margin: narrow ? { l: 52, r: 10, t: 64, b: 48 } : { l: 70, r: 24, t: 48, b: 56 },
       dragmode: false,
@@ -319,10 +323,7 @@
       plot_bgcolor: "rgba(0,0,0,0)",
     };
 
-    const chartEl = document.getElementById("chart");
-    Plotly.react(chartEl, traces, layout, {
-      displayModeBar: false, scrollZoom: false, responsive: true, staticPlot: TOUCH,
-    });
+    Plotly.react(chartEl, traces, layout, { displayModeBar: false, scrollZoom: false, staticPlot: TOUCH });
     renderWinners(xs, costs);
     renderDetail();
   }
@@ -445,15 +446,18 @@
     if (window.innerWidth < 700) {
       document.querySelectorAll("#plans details, #taxPanel, details.notes").forEach((d) => (d.open = false));
     }
-    let lastW = window.innerWidth;
-    window.addEventListener("resize", () => {
-      if (window.innerWidth !== lastW) {
-        lastW = window.innerWidth;
-        scheduleRender();
-      }
-    });
     render();
     const chartEl = document.getElementById("chart");
+    // Redraw when the chart's space changes width: window resizes, and layout changes such as the
+    // sidebar switching between one and two columns. Height-only changes are ignored, since mobile
+    // browsers resize the window when the address bar hides.
+    let lastW = chartEl.clientWidth;
+    new ResizeObserver(() => {
+      if (chartEl.clientWidth !== lastW) {
+        lastW = chartEl.clientWidth;
+        scheduleRender();
+      }
+    }).observe(chartEl);
     if (TOUCH) {
       chartEl.addEventListener("click", onTap);
       document.getElementById("tapcard-close").addEventListener("click", () => {

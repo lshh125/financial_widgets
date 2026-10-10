@@ -35,13 +35,16 @@
 
   // p = { balance, apr, months, mmRate, status, magi, carDeduction, startYear, startMonth (0-11) }
   // prepay: extra principal paid now, taken out of the money market.
+  // monthlyExtra: extra principal paid every month on top of the scheduled payment.
   //
-  // Both strategies spend the same each month: the scheduled payment. Once the prepaid loan is
-  // gone, that payment goes into the money market instead. Money market interest is taxed as it
-  // is earned (ordinary income + NIIT). The car loan deduction, if it applies, is credited at
-  // each year end through 2028. The comparison runs to the loan's original end date, when both
-  // strategies have no loan left, so the difference is all in the money market balance.
-  function simulate(p, prepay) {
+  // Both strategies spend the same each month: the scheduled payment plus the monthly extra. The
+  // Pay strategy puts the extra toward the loan; the Keep strategy puts it in the money market.
+  // Once a loan is gone, whatever it no longer needs goes into the money market. Money market
+  // interest is taxed as it is earned (ordinary income + NIIT). The car loan deduction, if it
+  // applies, is credited at each year end through 2028. The comparison runs to the loan's
+  // original end date, when both strategies have no loan left, so the difference is all in the
+  // money market balance.
+  function simulate(p, prepay, monthlyExtra = 0) {
     const t = taxRates(p.status, p.magi);
     const mmAfter = (p.mmRate * (1 - t.mm)) / 12;
     const mmGross = p.mmRate / 12;
@@ -49,6 +52,8 @@
     const payment = amortPayment(p.balance, p.apr, p.months);
     const reduction = carPhaseReduction(p.status, p.magi);
     prepay = Math.max(0, Math.min(prepay, p.balance));
+    monthlyExtra = Math.max(0, monthlyExtra);
+    const budget = payment + monthlyExtra;
 
     const mk = (bal, mm) => ({ bal, mm, interest: 0, earned: 0, deduction: 0, yrInterest: 0, payoff: bal > 0 ? null : 0 });
     const pay = mk(p.balance - prepay, 0);
@@ -67,14 +72,15 @@
         // Loan payment; whatever the loan no longer needs goes to the money market.
         if (s.bal > 0) {
           const interest = s.bal * r;
-          const due = m === N - 1 ? s.bal + interest : Math.min(payment, s.bal + interest);
+          const target = s === pay ? budget : payment;
+          const due = m === N - 1 ? s.bal + interest : Math.min(target, s.bal + interest);
           s.bal -= due - interest;
           if (s.bal < 1e-9) { s.bal = 0; s.payoff = m + 1; }
           s.interest += interest;
           s.yrInterest += interest;
-          s.mm += payment - due;
+          s.mm += budget - due;
         } else {
-          s.mm += payment;
+          s.mm += budget;
         }
         // Car loan deduction for the year, credited at year end (or at the end of the comparison).
         if (month === 11 || m === N - 1) {
