@@ -117,6 +117,15 @@ button:hover { background: #eef2f8; }
 }
 .tapcard a { display: inline-block; margin-top: 6px; color: var(--accent); }
 
+/* Wide windows (16:10 or wider, and at least 1400px): pages that opt in with main.wide-aside get a
+   two-column sidebar. Panels flow between the columns but are never split. */
+@media (min-aspect-ratio: 16/10) and (min-width: 1400px) {
+  main.wide-aside { grid-template-columns: 720px minmax(0, 1fr); }
+  main.wide-aside > aside { column-count: 2; column-gap: 32px; column-rule: 1px solid var(--border); }
+  main.wide-aside > aside section,
+  main.wide-aside > aside .panel { break-inside: avoid; }
+}
+
 @media (max-width: 900px) {
   main { grid-template-columns: minmax(0, 1fr); padding: 8px 16px 16px; }
   header { padding: 16px 16px 8px; }
