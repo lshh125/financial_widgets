@@ -55,6 +55,13 @@
     return tax;
   }
 
+  // Ordinary rate on the next dollar of AGI (0 while still inside the standard deduction).
+  function bracketRate(agi, status) {
+    const taxable = agi - TAX_2026.standardDeduction[status];
+    if (taxable < 0) return 0;
+    return TAX_2026.brackets[status].find(([upper]) => taxable < upper)[1];
+  }
+
   // Split one person's gross income into its parts.
   // p = { income, k401, hsa, pctCapGain, pctDividend, pctInterest } (percentages 0-100)
   function personParts(p) {
@@ -78,8 +85,13 @@
     );
   }
 
-  function sumTax(t) {
+  // Marginal rate = ordinary bracket + 3.8% when NIIT applies. Once MAGI is over the NIIT
+  // threshold, the next dollar of investment income always bears NIIT; the next wage dollar does
+  // too unless non-investment MAGI alone is already over the threshold.
+  function sumTax(t, agi, status) {
     t.total = t.incomeTax + t.payroll + t.addlMedicare + t.niit;
+    t.bracketRate = bracketRate(agi, status);
+    t.marginalRate = t.bracketRate + (t.niit > 0 ? TAX_2026.niitRate : 0);
     return t;
   }
 
@@ -95,7 +107,7 @@
       niit:
         TAX_2026.niitRate *
         Math.min(parts.investment, Math.max(0, parts.agi - TAX_2026.niitThreshold.single)),
-    });
+    }, parts.agi, "single");
   }
 
   function marriedTax(a, b) {
@@ -111,7 +123,7 @@
       niit:
         TAX_2026.niitRate *
         Math.min(a.investment + b.investment, Math.max(0, agi - TAX_2026.niitThreshold.mfj)),
-    });
+    }, agi, "mfj");
   }
 
   // diff > 0: marriage bonus (filing jointly saves money). diff < 0: marriage penalty.

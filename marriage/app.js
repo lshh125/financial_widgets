@@ -342,6 +342,12 @@
       const s = r.sa[k] + r.sb[k];
       return `<tr class="${cls}"><td>${label}</td><td>${m(r.sa[k])}</td><td>${m(r.sb[k])}</td><td>${m(s)}</td><td>${m(r.m[k])}</td><td>${showDiff ? kSigned(s - r.m[k]) : ""}</td></tr>`;
     };
+    const pct1 = (v) => (Math.round(v * 1000) / 10).toFixed(1) + "%";
+    const marginal = (t) =>
+      t.niit > 0
+        ? `${pct1(t.marginalRate)} <span class="muted">(${pct1(t.bracketRate)} without NIIT)</span>`
+        : pct1(t.marginalRate);
+    const effective = (tax, gross) => (gross > 0 ? pct1(tax / gross) : "—");
     const verdict =
       Math.abs(r.diff) < 50
         ? "No difference"
@@ -367,6 +373,8 @@
           ${taxRow("Additional Medicare (0.9%)", "addlMedicare")}
           ${taxRow("NIIT (3.8%)", "niit")}
           ${taxRow("Total tax", "total", "total")}
+          <tr><td>Marginal rate (income tax + NIIT)</td><td>${marginal(r.sa)}</td><td>${marginal(r.sb)}</td><td></td><td>${marginal(r.m)}</td><td></td></tr>
+          <tr><td>Effective rate (total tax ÷ gross)</td><td>${effective(r.sa.total, r.a.income)}</td><td>${effective(r.sb.total, r.b.income)}</td><td>${effective(r.singleTotal, sum("income"))}</td><td>${effective(r.m.total, sum("income"))}</td><td></td></tr>
         </tbody>
       </table>`;
   }

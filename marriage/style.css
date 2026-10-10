@@ -83,6 +83,7 @@ button:hover { background: #eef2f8; }
 .detail th, .detail td { padding: 4px 10px; text-align: right; border-bottom: 1px solid var(--border); }
 .detail th:first-child, .detail td:first-child { text-align: left; }
 .detail tr.total td { font-weight: 700; }
+.detail .muted { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .detail .headline { font-size: 16px; margin: 0 0 8px; }
 
 /* Touch-mode summary card for a tapped cell */
