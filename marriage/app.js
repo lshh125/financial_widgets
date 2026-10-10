@@ -147,6 +147,11 @@
   const kSigned = (v, dollar = true) =>
     signed(Math.round(v / 100) / 10, (a) => (dollar ? "$" : "") + a.toFixed(1) + "k");
   const pctSigned = (v) => signed(Math.round(v * 10) / 10, (a) => a.toFixed(1) + "%");
+  // Rates are fractions (0.24 → "24.0%").
+  const pct1 = (v) => (Math.round(v * 1000) / 10).toFixed(1) + "%";
+  const effective = (tax, gross) => (gross > 0 ? pct1(tax / gross) : "—");
+  const marginalShort = (t) =>
+    t.niit > 0 ? `${pct1(t.marginalRate)} (${pct1(t.bracketRate)} w/o NIIT)` : pct1(t.marginalRate);
 
   function fmtCell(v, mode) {
     return mode === "pct" ? pctSigned(v) : kSigned(v, false);
@@ -195,6 +200,8 @@
           kUnsigned(incA), kUnsigned(incB), kUnsigned(incA + incB),
           kUnsigned(r.sa.total), kUnsigned(r.sb.total), kUnsigned(r.singleTotal), kUnsigned(r.m.total),
           kSigned(r.diff), pctSigned(r.pct),
+          marginalShort(r.sa), marginalShort(r.sb), marginalShort(r.m),
+          effective(r.singleTotal, incA + incB), effective(r.m.total, incA + incB),
         ]);
       }
       z.push(zr); text.push(tr); custom.push(cr);
@@ -298,7 +305,13 @@
       `<b>Total if married (joint):</b> ${field(6)}<br>` +
       "──────────────<br>" +
       `<b>Difference:</b> ${field(7)}<br>` +
-      `<b>Relative:</b> ${field(8)} of unmarried tax`
+      `<b>Relative:</b> ${field(8)} of unmarried tax<br>` +
+      "──────────────<br>" +
+      `Marginal rate, A single: ${field(9)}<br>` +
+      `Marginal rate, B single: ${field(10)}<br>` +
+      `Marginal rate, married: ${field(11)}<br>` +
+      `Effective rate, single: ${field(12)}<br>` +
+      `Effective rate, married: ${field(13)}`
     );
   }
 
@@ -342,12 +355,10 @@
       const s = r.sa[k] + r.sb[k];
       return `<tr class="${cls}"><td>${label}</td><td>${m(r.sa[k])}</td><td>${m(r.sb[k])}</td><td>${m(s)}</td><td>${m(r.m[k])}</td><td>${showDiff ? kSigned(s - r.m[k]) : ""}</td></tr>`;
     };
-    const pct1 = (v) => (Math.round(v * 1000) / 10).toFixed(1) + "%";
     const marginal = (t) =>
       t.niit > 0
         ? `${pct1(t.marginalRate)} <span class="muted">(${pct1(t.bracketRate)} without NIIT)</span>`
         : pct1(t.marginalRate);
-    const effective = (tax, gross) => (gross > 0 ? pct1(tax / gross) : "—");
     const verdict =
       Math.abs(r.diff) < 50
         ? "No difference"
