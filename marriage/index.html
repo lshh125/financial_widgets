@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marriage Tax Heatmap 2026</title>
+  <link rel="stylesheet" href="../site.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">Financial Widgets</span>
+    <nav>
+      <a href="../">Home</a>
+      <a href="./" aria-current="page">Marriage benefit/penalty</a>
+    </nav>
+  </header>
+
+  <header>
+    <h1>Marriage Tax Bonus / Penalty — 2026</h1>
+    <p class="sub">
+      Federal tax (income tax + Social Security + Medicare + Additional Medicare + NIIT) for two people
+      filing <b>Single</b> versus <b>Married Filing Jointly</b>.
+      <span class="pos">Blue</span> = marriage saves money,
+      <span class="neg">red</span> = marriage costs money.
+    </p>
+    <p class="sub">Not tax advice; accuracy is not guaranteed. See the <a href="../">disclaimer</a>.</p>
+  </header>
+
+  <main>
+    <aside id="controls">
+      <section>
+        <h2>Display</h2>
+        <label class="row">Cell value
+          <select id="mode">
+            <option value="diff">$ difference</option>
+            <option value="pct">% of unmarried tax</option>
+          </select>
+        </label>
+        <label class="row check"><input type="checkbox" id="showText" checked /> Show numbers in cells</label>
+        <button id="reset" type="button">Reset to defaults</button>
+      </section>
+      <div id="people"></div>
+      <section class="notes">
+        <h2>Assumptions</h2>
+        <ul>
+          <li>Standard deduction only ($16,100 single, $32,200 joint). No credits, no state tax.</li>
+          <li>Investment income (short-term gains, dividends, interest) is taxed as ordinary income, is not
+            subject to FICA, and counts toward NIIT.</li>
+          <li>All other income is wages. 401(k) lowers income tax but not FICA. HSA is assumed to go through
+            payroll, so it lowers both. Contributions are capped at wages.</li>
+          <li>Each person's FICA is computed on their own wages. Social Security wage base is $184,500.</li>
+          <li>Additional Medicare 0.9% over $200k (single) / $250k (joint). NIIT 3.8% over $200k / $250k MAGI.</li>
+          <li>2026 limits: 401(k) $24,500 (+$8,000 age 50+, or +$11,250 age 60–63). HSA uses the self-only
+            limit per person, $4,400 (+$1,000 age 55+); two self-only limits (~$8,800) approximate the $8,750
+            family limit.</li>
+        </ul>
+      </section>
+    </aside>
+
+    <section id="viz">
+      <div id="chartWrap"><div id="chart"></div></div>
+      <div id="detail" class="detail"><p class="hint">Click a cell to see the full breakdown.</p></div>
+    </section>
+  </main>
+
+  <script src="tax.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+/* Shared top bar with tabs, used by every page. */
+.topbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  padding: 0 24px;
+  background: #1d2330;
+  color: #fff;
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow-x: auto;
+}
+.topbar .brand {
+  font-weight: 700;
+  font-size: 15px;
+  padding: 12px 0;
+  white-space: nowrap;
+}
+.topbar nav { display: flex; gap: 4px; }
+.topbar nav a {
+  color: #c9d1e0;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 6px 6px 0 0;
+  white-space: nowrap;
+}
+.topbar nav a:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.topbar nav a[aria-current="page"] { color: #1d2330; background: #f6f7f9; font-weight: 600; }
+
+@media (max-width: 600px) {
+  .topbar { padding: 0 16px; gap: 12px; }
+}
