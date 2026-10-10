@@ -79,6 +79,21 @@
         <h2>Best starting age by how long you collect</h2>
         <div id="ranges"></div>
       </div>
+      <div class="card" id="lifeCard">
+        <h2>Total value over an uncertain lifespan</h2>
+        <p class="sub small">Nobody knows how long they will collect, so instead of picking one age, set the chance of
+          still collecting at each age (linear in between). The chart shows how likely each total value is for each
+          starting age, given you reach 62; dashed lines mark the expected values.</p>
+        <div class="life">
+          <div class="surv">
+            <div class="survhead">Chance of collecting until age</div>
+            <div id="survSliders" class="survgrid"><svg id="survLine" aria-hidden="true"></svg></div>
+          </div>
+          <div id="pdfChart"></div>
+        </div>
+        <p id="lifeHeadline" class="headline"></p>
+        <div class="tablewrap"><table id="lifeTable" class="data"></table></div>
+      </div>
     </section>
   </main>
 

@@ -76,5 +76,55 @@
     return null;
   }
 
-  root.SSCalc = { START_AGE, FRA, LAST_CLAIM_AGE, CLAIM_AGES, claimFactor, series, allSeries, bestAt, bestRanges, crossover };
+  // ---------- Uncertain lifespan ----------
+
+  const LIFE_AGES = [60, 70, 80, 90, 100, 110];
+  const MAX_AGE = 110;
+
+  // Chance of still collecting at `age`, from knots [[age, p], ...], linear in between.
+  function survivalAt(knots, age) {
+    if (age <= knots[0][0]) return knots[0][1];
+    for (let k = 1; k < knots.length; k++) {
+      const [a1, p1] = knots[k - 1], [a2, p2] = knots[k];
+      if (age <= a2) return p1 + ((p2 - p1) * (age - a1)) / (a2 - a1);
+    }
+    return knots[knots.length - 1][1];
+  }
+
+  // probs[m] = chance of collecting exactly m monthly checks (m = 0 .. (110 − 62) × 12), given
+  // being alive at 62: the chance of reaching month m but not month m + 1.
+  // Returns null if nobody reaches 62.
+  function lifeDistribution(knots) {
+    const n = (MAX_AGE - START_AGE) * 12;
+    const s0 = survivalAt(knots, START_AGE);
+    if (!(s0 > 0)) return null;
+    const probs = new Float64Array(n + 1);
+    for (let m = 0; m <= n; m++) {
+      const here = survivalAt(knots, START_AGE + m / 12);
+      const next = m === n ? 0 : survivalAt(knots, START_AGE + (m + 1) / 12);
+      probs[m] = Math.max(0, here - next) / s0;
+    }
+    return probs;
+  }
+
+  // Distribution of the total value collected for one starting age: [{ value, prob }] sorted by
+  // value, plus the expected value and median. s = series(claimAge, p) computed up to age 110.
+  function valueDistribution(s, probs) {
+    const pts = [];
+    let mean = 0;
+    for (let m = 0; m < probs.length; m++) {
+      if (probs[m] <= 0) continue;
+      pts.push({ value: s.value[m], prob: probs[m] });
+      mean += s.value[m] * probs[m];
+    }
+    pts.sort((a, b) => a.value - b.value);
+    let acc = 0, median = 0;
+    for (const pt of pts) { acc += pt.prob; if (acc >= 0.5) { median = pt.value; break; } }
+    return { pts, mean, median };
+  }
+
+  root.SSCalc = {
+    START_AGE, FRA, LAST_CLAIM_AGE, CLAIM_AGES, LIFE_AGES, MAX_AGE, claimFactor, series, allSeries,
+    bestAt, bestRanges, crossover, survivalAt, lifeDistribution, valueDistribution,
+  };
 })(this);

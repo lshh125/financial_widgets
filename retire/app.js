@@ -14,8 +14,10 @@
 
   const defaults = () => ({
     pia: 4152, cola: COLA_AVG, rate: 2.53, endAge: 100,
-    show: Object.fromEntries(C.CLAIM_AGES.map((a) => [a, true])),
+    show: Object.fromEntries(C.CLAIM_AGES.map((a) => [a, [62, 65, 67, 70].includes(a)])),
     mode: "value", scale: "linear",
+    // Chance (%) of still collecting at each age; 110 is fixed at 0.
+    surv: { 60: 100, 70: 100, 80: 100, 90: 100, 100: 100, 110: 0 },
   });
   let state = defaults();
   let selected = null; // months since 62 of the clicked point
@@ -63,9 +65,66 @@
     chips.querySelectorAll("input").forEach((box) => box.addEventListener("change", () => { state.show[box.value] = box.checked; scheduleRender(); }));
     ctls.push({ sync: () => chips.querySelectorAll("input").forEach((box) => (box.checked = !!state.show[box.value])) });
 
+    buildSurvival();
+
     const colaBtn = document.getElementById("colaAvg");
     ctls.push({ sync: () => colaBtn.classList.toggle("active", Math.abs(state.cola - COLA_AVG) < 1e-9) });
     for (const c of ctls) c.sync();
+  }
+
+  // Vertical sliders for the chance of collecting until each age, joined by a line so they read
+  // like a survival curve. Moving one pushes its neighbors so the chance never rises with age.
+  function buildSurvival() {
+    const host = document.getElementById("survSliders");
+    host.querySelectorAll(".scol").forEach((e) => e.remove());
+    for (const age of C.LIFE_AGES) {
+      const fixed = age === C.MAX_AGE;
+      const col = document.createElement("div");
+      col.className = "scol";
+      col.innerHTML =
+        `<input type="number" min="0" max="100" step="1" inputmode="numeric" aria-label="Chance of collecting until ${age} (%)"${fixed ? " disabled" : ""}>` +
+        `<input type="range" class="v" min="0" max="100" step="1" aria-label="Chance of collecting until ${age}"${fixed ? " disabled" : ""}>` +
+        `<span>${age}</span>`;
+      const [numBox, range] = col.querySelectorAll("input");
+      const set = (v, except) => {
+        if (!Number.isFinite(v)) return;
+        v = Math.max(0, Math.min(100, v));
+        state.surv[age] = v;
+        for (const a of C.LIFE_AGES) {
+          if (a > age && a !== C.MAX_AGE) state.surv[a] = Math.min(state.surv[a], v);
+          if (a < age) state.surv[a] = Math.max(state.surv[a], v);
+        }
+        onChange(except);
+      };
+      range.addEventListener("input", () => set(+range.value));
+      numBox.addEventListener("input", () => set(parseFloat(numBox.value), numBox));
+      numBox.addEventListener("change", () => onChange());
+      host.appendChild(col);
+    }
+    ctls.push({
+      sync: (except) => {
+        host.querySelectorAll(".scol").forEach((col, k) => {
+          const v = state.surv[C.LIFE_AGES[k]];
+          const [numBox, range] = col.querySelectorAll("input");
+          range.value = v;
+          if (except !== numBox) numBox.value = v;
+        });
+        drawSurvivalLine();
+      },
+    });
+  }
+
+  function drawSurvivalLine() {
+    const host = document.getElementById("survSliders"), svg = document.getElementById("survLine");
+    const box = host.getBoundingClientRect();
+    if (!box.width) return;
+    const pts = [...host.querySelectorAll("input.v")].map((r, k) => {
+      const b = r.getBoundingClientRect(), thumb = 16;
+      const p = state.surv[C.LIFE_AGES[k]] / 100;
+      return `${b.left + b.width / 2 - box.left},${b.top + thumb / 2 + (1 - p) * (b.height - thumb) - box.top}`;
+    });
+    svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+    svg.innerHTML = `<polyline points="${pts.join(" ")}" />`;
   }
 
   // ---------- Rendering ----------
@@ -85,6 +144,89 @@
     renderChart(all, n);
     renderDecision(all, n);
     renderRanges(all, n);
+    renderLife(p);
+  }
+
+  // Distribution of total value collected, weighting each possible lifespan by its chance.
+  function renderLife(p) {
+    drawSurvivalLine();
+    const knots = C.LIFE_AGES.map((a) => [a, state.surv[a] / 100]);
+    const probs = C.lifeDistribution(knots);
+    const el = document.getElementById("pdfChart");
+    if (!probs) {
+      document.getElementById("lifeHeadline").textContent = "Set a chance above 0% of collecting at 60 or 70 to see the distribution.";
+      document.getElementById("lifeTable").innerHTML = "";
+      Plotly.purge(el);
+      return;
+    }
+    const full = { ...p, endAge: C.MAX_AGE };
+    const dists = {}, sers = {};
+    for (const a of C.CLAIM_AGES) {
+      sers[a] = C.series(a, full);
+      dists[a] = C.valueDistribution(sers[a], probs);
+    }
+    const shown = C.CLAIM_AGES.filter((a) => state.show[a]);
+
+    // For the chart, each month's chance is spread evenly over the value range covered during that
+    // month (value[m] to value[m + 1]). Putting it all at one point makes the bars saw-toothed,
+    // since bins catch a varying number of months. Expected values and medians are unaffected.
+    const span = (s, m) => [s.value[m], m + 1 < s.value.length ? s.value[m + 1] : s.value[m]];
+    let lo = Infinity, hi = -Infinity;
+    for (const a of shown) {
+      for (let m = 0; m < probs.length; m++) {
+        if (probs[m] <= 1e-9) continue;
+        const [v0, v1] = span(sers[a], m);
+        lo = Math.min(lo, v0);
+        hi = Math.max(hi, v1);
+      }
+    }
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (hi - lo < 1) { lo -= 1; hi += 1; }
+    const nb = 40, w = (hi - lo) / nb;
+    const edges = Array.from({ length: nb + 1 }, (_, k) => lo + k * w);
+    const binOf = (v) => Math.max(0, Math.min(nb - 1, Math.floor((v - lo) / w)));
+    const traces = [], shapes = [];
+    for (const a of shown) {
+      const bins = new Array(nb).fill(0);
+      for (let m = 0; m < probs.length; m++) {
+        const pm = probs[m];
+        if (pm <= 0) continue;
+        const [v0, v1] = span(sers[a], m);
+        if (v1 - v0 < 1e-9) { bins[binOf(v0)] += pm; continue; }
+        for (let b = binOf(v0); b <= binOf(v1); b++) {
+          const overlap = Math.min(v1, edges[b + 1]) - Math.max(v0, edges[b]);
+          if (overlap > 0) bins[b] += (pm * overlap) / (v1 - v0);
+        }
+      }
+      traces.push({
+        type: "scatter", mode: "lines", name: `Start at ${a}`, x: edges, y: [...bins, bins[nb - 1]].map((v) => v * 100),
+        line: { color: COLORS[a], width: 2, shape: "hv" },
+        customdata: edges.map((e) => `${U.kMoney(e)}–${U.kMoney(e + w)}`),
+        hovertemplate: `Start at ${a}: %{y:.1f}% chance of %{customdata}<extra></extra>`,
+      });
+      shapes.push({ type: "line", xref: "x", yref: "paper", x0: dists[a].mean, x1: dists[a].mean, y0: 0, y1: 1, line: { color: COLORS[a], width: 1.5, dash: "dash" } });
+    }
+    const narrow = window.innerWidth < 700;
+    Plotly.react(el, traces, {
+      width: Math.max(260, Math.floor(el.clientWidth)), height: narrow ? 300 : 320,
+      margin: narrow ? { l: 46, r: 10, t: 50, b: 44 } : { l: 56, r: 16, t: 36, b: 48 },
+      dragmode: false, hovermode: "x unified", shapes,
+      legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", font: { size: narrow ? 10 : 12 } },
+      xaxis: { title: { text: "Total value collected" }, tickprefix: "$", tickformat: "~s", fixedrange: true },
+      yaxis: { title: { text: "Chance (%)" }, ticksuffix: "%", rangemode: "tozero", fixedrange: true },
+      hoverlabel: { align: "left", bgcolor: "#fff", font: { size: 12.5, color: "#1d2330" } },
+      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    }, { displayModeBar: false, scrollZoom: false, staticPlot: TOUCH });
+
+    const best = C.CLAIM_AGES.reduce((b, a) => (dists[a].mean > dists[b].mean ? a : b), C.CLAIM_AGES[0]);
+    document.getElementById("lifeHeadline").innerHTML =
+      `Weighing every lifespan by its chance, starting at <b style="color:${COLORS[best]}">${best}</b> has the highest expected total value: ` +
+      `<b>${U.money(dists[best].mean)}</b>, valuing each dollar at ${state.rate.toFixed(2)}% a year.`;
+    document.getElementById("lifeTable").innerHTML =
+      `<thead><tr><th>Start at</th><th>Expected value</th><th>Median</th><th>vs. best expected</th></tr></thead><tbody>` +
+      C.CLAIM_AGES.map((a) => `<tr class="${a === best ? "best" : ""}"><td><span class="dot" style="--c:${COLORS[a]}"></span>${a}</td>` +
+        `<td>${U.money(dists[a].mean)}</td><td>${U.money(dists[a].median)}</td>` +
+        `<td>${a === best ? "best" : ((dists[a].mean / dists[best].mean - 1) * 100).toFixed(1) + "%"}</td></tr>`).join("") + `</tbody>`;
   }
 
   const yOf = (s, m) => (state.mode === "avg" ? (m > 0 ? s.value[m] / m : null) : s.value[m]);

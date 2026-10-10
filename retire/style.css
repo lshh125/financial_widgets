@@ -41,3 +41,28 @@ table.data tr.best td { font-weight: 700; background: #f3f7ee; }
   table.data th, table.data td { padding: 4px 6px; }
   .chips span { min-width: 38px; padding: 6px; }
 }
+
+/* Uncertain lifespan: survival sliders beside the value distribution */
+.life { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 6px; }
+.survhead { font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+.survgrid { position: relative; display: flex; gap: 6px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 8px; }
+.survgrid svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.survgrid polyline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-opacity: .55; stroke-linejoin: round; }
+.scol { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 46px; }
+.scol input[type=number] {
+  width: 46px; font: inherit; font-size: 12.5px; text-align: center; padding: 2px 0;
+  border: 1px solid var(--border); border-radius: 6px; font-variant-numeric: tabular-nums;
+}
+.scol input[type=number]:disabled { background: #f2f4f7; color: var(--muted); }
+.scol input.v { writing-mode: vertical-lr; direction: rtl; width: 24px; height: 150px; margin: 0; accent-color: var(--accent); }
+.scol span { font-size: 12.5px; font-weight: 600; }
+#lifeTable { max-width: 620px; margin-top: 4px; }
+
+@media (max-width: 1100px) {
+  .life { grid-template-columns: minmax(0, 1fr); }
+  .survgrid { justify-content: space-between; }
+}
+@media (max-width: 700px) {
+  .scol { width: auto; flex: 1; }
+  .scol input[type=number] { width: 100%; font-size: 16px; }
+}
